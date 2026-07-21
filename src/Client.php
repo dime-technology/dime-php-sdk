@@ -9,6 +9,7 @@ use DimePayments\Sdk\Http\Transport;
 use DimePayments\Sdk\Resources\Addresses;
 use DimePayments\Sdk\Resources\Customers;
 use DimePayments\Sdk\Resources\Deposits;
+use DimePayments\Sdk\Resources\Invoices;
 use DimePayments\Sdk\Resources\Merchants;
 use DimePayments\Sdk\Resources\PaymentMethods;
 use DimePayments\Sdk\Resources\RecurringPayments;
@@ -45,6 +46,8 @@ final class Client
 
     public readonly RecurringPayments $recurringPayments;
 
+    public readonly Invoices $invoices;
+
     private readonly Config $config;
 
     /**
@@ -65,6 +68,7 @@ final class Client
         $this->addresses = new Addresses($transport);
         $this->deposits = new Deposits($transport);
         $this->recurringPayments = new RecurringPayments($transport);
+        $this->invoices = new Invoices($transport);
     }
 
     public function config(): Config
