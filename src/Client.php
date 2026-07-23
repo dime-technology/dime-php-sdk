@@ -13,6 +13,8 @@ use DimePayments\Sdk\Resources\Invoices;
 use DimePayments\Sdk\Resources\Merchants;
 use DimePayments\Sdk\Resources\PaymentMethods;
 use DimePayments\Sdk\Resources\RecurringPayments;
+use DimePayments\Sdk\Resources\SubscriptionPlans;
+use DimePayments\Sdk\Resources\Subscriptions;
 use DimePayments\Sdk\Resources\Transactions;
 
 /**
@@ -48,6 +50,10 @@ final class Client
 
     public readonly Invoices $invoices;
 
+    public readonly SubscriptionPlans $subscriptionPlans;
+
+    public readonly Subscriptions $subscriptions;
+
     private readonly Config $config;
 
     /**
@@ -69,6 +75,8 @@ final class Client
         $this->deposits = new Deposits($transport);
         $this->recurringPayments = new RecurringPayments($transport);
         $this->invoices = new Invoices($transport);
+        $this->subscriptionPlans = new SubscriptionPlans($transport);
+        $this->subscriptions = new Subscriptions($transport);
     }
 
     public function config(): Config

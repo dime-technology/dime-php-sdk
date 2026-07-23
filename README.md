@@ -73,6 +73,8 @@ in a `$filters` array). All amounts are returned as strings to avoid float round
 | `$dime->deposits`         | list, list-with-transactions, show                               |
 | `$dime->recurringPayments`| list, show, create, edit, pause, cancel, activate, delete        |
 | `$dime->invoices`         | list, show, create, update, delete, send, markSent, void, duplicate, pay, link, addLineItem, updateLineItem, deleteLineItem, listItems, createItem, listRecurring, showRecurring, createRecurring, cancelRecurring |
+| `$dime->subscriptionPlans`| list, show, create, update, delete, publish, archive, unarchive, subscribe |
+| `$dime->subscriptions`    | list, show, pause, resume, cancel                                |
 
 ### Transactions
 
@@ -294,6 +296,50 @@ $template = $dime->invoices->createRecurring('000010', [
 ]);
 
 $dime->invoices->cancelRecurring('000010', $template->id);
+### Subscription plans and subscriptions
+
+A **subscription plan** is a reusable recurring offering; a **subscription** is one
+customer's enrollment in a plan. Plans are created as drafts and must be published
+before customers can subscribe. Each line references a Merchant `item_id`; the name
+and unit price are snapshotted onto the plan (and again onto each subscription).
+
+```php
+// Create a draft plan, then publish it
+$plan = $dime->subscriptionPlans->create('000010', [
+    'name'                => 'Monthly Membership',
+    'description'         => 'Full access, billed monthly.',
+    'recurrence_schedule' => 'Monthly',   // Weekly, Biweekly, FirstFifteenth, Monthly, Yearly
+    'allow_public'        => true,         // list in the public catalog
+    'lines'               => [
+        ['item_id' => 5, 'name' => 'Base membership', 'quantity' => 1, 'unit_price' => 25.00],
+    ],
+]);
+
+$plan = $dime->subscriptionPlans->publish('000010', $plan->id);
+echo $plan->status;      // "active"
+echo $plan->publicUrl;   // hosted subscribe page
+
+// Enroll a customer (charges the first payment against a saved payment method)
+$result = $dime->subscriptionPlans->subscribe('000010', $plan->id, [
+    'customer_uuid'  => $customer->uuid,
+    'payment_method' => $pm->id,
+]);
+echo $result->subscriptionId;      // 10
+echo $result->transactionNumber;   // first charge
+
+// Lifecycle: pause (optionally until a date), resume, cancel
+$dime->subscriptions->pause('000010', $result->subscriptionId, '2026-09-01');
+$dime->subscriptions->resume('000010', $result->subscriptionId);
+$dime->subscriptions->cancel('000010', $result->subscriptionId);
+
+// Plans have their own lifecycle: archive stops new sign-ups but keeps existing
+// subscribers; unarchive returns it to draft for re-publishing.
+$dime->subscriptionPlans->archive('000010', $plan->id);
+$dime->subscriptionPlans->unarchive('000010', $plan->id);
+
+// Read
+$plans = $dime->subscriptionPlans->list('000010', ['status' => 'active']);
+$subs  = $dime->subscriptions->list('000010', ['status' => 'Active', 'customer_uuid' => $customer->uuid]);
 ```
 
 ## Pagination
