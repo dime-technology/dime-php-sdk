@@ -22,6 +22,11 @@ use DimePayments\Sdk\Pagination\CursorPage;
  * passed in `$attributes` (merged into the request's `data` envelope) or in
  * `$filters` (merged into the `filters` envelope). See each method's array
  * shape for the accepted keys.
+ *
+ * Identify the customer with `customer_uuid` — the same identifier the customer,
+ * payment-method and address endpoints use, and the only one the `Customer` data
+ * object exposes. `customer_id` remains accepted for integrations written against the
+ * original contract; supply exactly one.
  */
 final class Invoices extends AbstractResource
 {
@@ -60,10 +65,11 @@ final class Invoices extends AbstractResource
      *
      * @param  array{
      *     invoice_number?: string,
-     *     customer_id: int|string,
+     *     customer_uuid?: string,
+     *     customer_id?: int|string,
      *     customer_name: string,
      *     customer_email: string,
-     *     payment_terms: string,
+     *     payment_terms: 'due_on_receipt'|'net_15'|'net_30'|'net_60',
      *     issue_date?: string,
      *     thank_you_note?: string,
      *     allow_partial_payment?: bool,
@@ -84,10 +90,11 @@ final class Invoices extends AbstractResource
      *
      * @param  array{
      *     invoice_number?: string,
-     *     customer_id: int|string,
+     *     customer_uuid?: string,
+     *     customer_id?: int|string,
      *     customer_name: string,
      *     customer_email: string,
-     *     payment_terms: string,
+     *     payment_terms: 'due_on_receipt'|'net_15'|'net_30'|'net_60',
      *     issue_date?: string,
      *     thank_you_note?: string,
      *     allow_partial_payment?: bool,
@@ -180,7 +187,7 @@ final class Invoices extends AbstractResource
      * to allow them).
      *
      * @param  array{
-     *     payment_type: string,
+     *     payment_type: 'cc'|'ach',
      *     amount?: int|float|string,
      *     memo?: string,
      *     token?: string,
@@ -346,9 +353,10 @@ final class Invoices extends AbstractResource
      * the first invoice is generated and sent immediately.
      *
      * @param  array{
-     *     customer_id: int|string,
-     *     payment_terms: string,
-     *     recurring_frequency: string,
+     *     customer_uuid?: string,
+     *     customer_id?: int|string,
+     *     payment_terms: 'due_on_receipt'|'net_15'|'net_30'|'net_60',
+     *     recurring_frequency: 'Weekly'|'Biweekly'|'FirstFifteenth'|'Monthly'|'Yearly',
      *     recurring_start_date: string,
      *     recurring_end_date?: string,
      *     thank_you_note?: string,
