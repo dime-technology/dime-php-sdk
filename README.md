@@ -72,6 +72,7 @@ in a `$filters` array). All amounts are returned as strings to avoid float round
 | `$dime->addresses`        | list, show, create, update, delete                               |
 | `$dime->deposits`         | list, list-with-transactions, show                               |
 | `$dime->recurringPayments`| list, show, create, edit, pause, cancel, activate, delete        |
+| `$dime->invoices`         | list, show, create, update, delete, send, markSent, void, duplicate, pay, link, addLineItem, updateLineItem, deleteLineItem, listItems, createItem, listRecurring, showRecurring, createRecurring, cancelRecurring |
 
 ### Transactions
 
@@ -168,6 +169,72 @@ $rp = $dime->recurringPayments->create('000010', [
 $dime->recurringPayments->pause('000010', $rp->id, '2026-09-01 00:00:00');
 $dime->recurringPayments->activate('000010', $rp->id);
 $dime->recurringPayments->cancel('000010', $rp->id);
+```
+
+### Invoices
+
+Invoices are scoped to a merchant `sid` and built from line items that each reference a merchant
+item (a fund or designation). Draft invoices can be edited; once sent they are locked.
+
+Identify the customer with `customer_uuid` — the same uuid every other resource uses, and the only
+identifier the customer endpoints return. `customer_id` is still accepted for older integrations.
+
+```php
+// Look up (or create) the items a line can reference
+$items = $dime->invoices->listItems('000010');
+$item  = $dime->invoices->createItem('000010', [
+    'name'           => 'Consulting',
+    'price'          => 125,
+    'tax_deductible' => false,
+]);
+
+// Create a draft invoice with one or more line items
+$invoice = $dime->invoices->create('000010', [
+    'customer_uuid'  => $customer->uuid,
+    'customer_name'  => 'Jane Doe',
+    'customer_email' => 'jane@example.com',
+    'payment_terms'  => 'net_15', // due_on_receipt | net_15 | net_30 | net_60
+    'lines'          => [
+        ['item_id' => $item->id, 'name' => 'Consulting', 'description' => '2 hours', 'quantity' => 2, 'unit_price' => 125],
+    ],
+]);
+
+// Tweak the draft's line items (each returns the refreshed invoice)
+$invoice = $dime->invoices->addLineItem('000010', $invoice->id, ['item_id' => $item->id, 'name' => 'Setup', 'quantity' => 1, 'unit_price' => 50]);
+$invoice = $dime->invoices->updateLineItem('000010', $invoice->id, $invoice->items[0]->id, ['quantity' => 3]);
+$invoice = $dime->invoices->deleteLineItem('000010', $invoice->id, $invoice->items[0]->id);
+
+// Email it to the customer, or activate the pay link without emailing
+$dime->invoices->send('000010', $invoice->id);
+$dime->invoices->markSent('000010', $invoice->id);
+
+// Share the public pay link
+$link = $dime->invoices->link('000010', $invoice->id);
+echo $link->publicUrl;
+
+// Take payment against the balance
+$dime->invoices->pay('000010', $invoice->id, [
+    'token'  => $pm->token,
+    'amount' => 125.00,
+]);
+
+$dime->invoices->void('000010', $invoice->id);
+```
+
+Recurring invoices are templates that emit an invoice on a schedule:
+
+```php
+$template = $dime->invoices->createRecurring('000010', [
+    'customer_uuid'        => $customer->uuid,
+    'payment_terms'        => 'net_30',
+    'recurring_frequency'  => 'Monthly', // Weekly | Biweekly | FirstFifteenth | Monthly | Yearly
+    'recurring_start_date' => '2026-09-01',
+    'lines'                => [
+        ['item_id' => $item->id, 'name' => 'Retainer', 'quantity' => 1, 'unit_price' => 500],
+    ],
+]);
+
+$dime->invoices->cancelRecurring('000010', $template->id);
 ```
 
 ## Pagination

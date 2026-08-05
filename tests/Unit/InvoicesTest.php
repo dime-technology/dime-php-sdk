@@ -168,6 +168,42 @@ it('creates an invoice and sends the line items', function () {
         ]);
 });
 
+it('forwards customer_uuid so a Customer can be linked without its integer id', function () {
+    [$client, $history] = fakeClient([jsonResponse(['data' => fullInvoice()], 201)]);
+
+    $client->invoices->create('000010', [
+        'customer_uuid' => '9f2a6c14-3e8b-4d21-9a77-5c1e0b8f4d33',
+        'customer_name' => 'Jane Doe',
+        'customer_email' => 'jane@example.com',
+        'payment_terms' => 'net_15',
+        'lines' => [
+            ['item_id' => 5, 'name' => 'Consulting', 'quantity' => 2, 'unit_price' => 125],
+        ],
+    ]);
+
+    $sent = sentJson($history);
+    expect($sent['data']['customer_uuid'])->toBe('9f2a6c14-3e8b-4d21-9a77-5c1e0b8f4d33')
+        ->and($sent['data'])->not->toHaveKey('customer_id');
+});
+
+it('forwards customer_uuid on a recurring invoice too', function () {
+    [$client, $history] = fakeClient([jsonResponse(['data' => fullRecurringInvoice()], 201)]);
+
+    $client->invoices->createRecurring('000010', [
+        'customer_uuid' => '9f2a6c14-3e8b-4d21-9a77-5c1e0b8f4d33',
+        'payment_terms' => 'net_30',
+        'recurring_frequency' => 'Monthly',
+        'recurring_start_date' => '2026-09-01',
+        'lines' => [
+            ['item_id' => 5, 'name' => 'Retainer', 'quantity' => 1, 'unit_price' => 500],
+        ],
+    ]);
+
+    $sent = sentJson($history);
+    expect($sent['data']['customer_uuid'])->toBe('9f2a6c14-3e8b-4d21-9a77-5c1e0b8f4d33')
+        ->and($sent['data']['recurring_frequency'])->toBe('Monthly');
+});
+
 it('updates a draft invoice with the id merged into data', function () {
     [$client, $history] = fakeClient([jsonResponse(['data' => fullInvoice()])]);
 
