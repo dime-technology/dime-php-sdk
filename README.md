@@ -179,6 +179,14 @@ item (a fund or designation). Draft invoices can be edited; once sent they are l
 Identify the customer with `customer_uuid` — the same uuid every other resource uses, and the only
 identifier the customer endpoints return. `customer_id` is still accepted for older integrations.
 
+**Statuses.** `$invoice->status` is one of `draft`, `sent`, `viewed`, `partially_paid`, `paid`,
+`void` or `refunded` — lowercase. To detect settlement, compare against `paid`; `partially_paid`
+means a payment landed but a balance remains, which `$invoice->balance` reports.
+
+There is no `overdue` status. Being overdue is a property of an open invoice past its due date, so
+it reads as `$invoice->isOverdue`. `overdue` and `all` are accepted as *filter* values on `list()`
+alongside the real statuses.
+
 ```php
 // Look up (or create) the items a line can reference
 $items = $dime->invoices->listItems('000010');

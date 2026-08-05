@@ -33,7 +33,11 @@ final class Invoices extends AbstractResource
     /**
      * List invoices for a merchant, optionally filtered by status.
      *
-     * @param  array{status?: string}  $filters
+     * `overdue` and `all` are filter-only values, not statuses an invoice can
+     * hold — an overdue invoice is one that is still open past its due date,
+     * which reads as `isOverdue` on the invoice itself.
+     *
+     * @param  array{status?: 'draft'|'sent'|'viewed'|'partially_paid'|'paid'|'void'|'refunded'|'overdue'|'all'}  $filters
      * @return CursorPage<InvoiceSummary>
      */
     public function list(string $sid, array $filters = []): CursorPage
@@ -319,9 +323,9 @@ final class Invoices extends AbstractResource
 
     /**
      * List recurring-invoice templates for a merchant, optionally filtered by
-     * status (Active, Ended, Cancelled).
+     * status.
      *
-     * @param  array{status?: string}  $filters
+     * @param  array{status?: 'Active'|'Ended'|'Cancelled'}  $filters
      * @return CursorPage<RecurringInvoiceSummary>
      */
     public function listRecurring(string $sid, array $filters = []): CursorPage
