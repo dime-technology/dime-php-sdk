@@ -212,10 +212,12 @@ $dime->invoices->markSent('000010', $invoice->id);
 $link = $dime->invoices->link('000010', $invoice->id);
 echo $link->publicUrl;
 
-// Take payment against the balance
+// Take payment against the balance. payment_type is required; omit amount to
+// pay the full balance.
 $dime->invoices->pay('000010', $invoice->id, [
-    'token'  => $pm->token,
-    'amount' => 125.00,
+    'payment_type' => 'cc', // cc | ach
+    'token'        => $pm->token,
+    'amount'       => 125.00,
 ]);
 
 $dime->invoices->void('000010', $invoice->id);

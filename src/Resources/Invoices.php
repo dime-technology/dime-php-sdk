@@ -187,7 +187,7 @@ final class Invoices extends AbstractResource
      * to allow them).
      *
      * @param  array{
-     *     payment_type: string,
+     *     payment_type: 'cc'|'ach',
      *     amount?: int|float|string,
      *     memo?: string,
      *     token?: string,
