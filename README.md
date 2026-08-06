@@ -231,7 +231,51 @@ $dime->invoices->pay('000010', $invoice->id, [
 $dime->invoices->void('000010', $invoice->id);
 ```
 
-Recurring invoices are templates that emit an invoice on a schedule:
+#### Making the customer cover processing fees
+
+Set `cover_fee_required` and the customer must pay the processing fee — it is not an optional
+checkbox at checkout. The fee is **not** a line item and is **not** part of `total`: the merchant is
+still owed `total`, and the fee is added on top of whatever the customer pays.
+
+Card and ACH rates differ, so the charge depends on how the customer pays. `coverFeeQuote` gives you
+both, quoted against the outstanding balance:
+
+```php
+$invoice = $dime->invoices->create('000010', [
+    'customer_uuid'      => $customer->uuid,
+    'customer_name'      => 'Jane Doe',
+    'customer_email'     => 'jane@example.com',
+    'payment_terms'      => 'net_15',
+    'cover_fee_required' => true, // omit to inherit the merchant's invoice setting
+    'lines'              => [
+        ['item_id' => $item->id, 'name' => 'Consulting', 'quantity' => 1, 'unit_price' => 100],
+    ],
+]);
+
+$invoice->total;                   // "100.00" — what the merchant is owed
+$invoice->coverFeeQuote->ccTotal;  // "104.32" — charged if they pay by card
+$invoice->coverFeeQuote->achTotal; // "101.26" — charged if they pay by bank
+```
+
+The card figure is the higher of the two and is what the invoice and its emails lead with. A partial
+payment re-quotes the fee against the partial amount, so treat the quote as "settling in full today"
+rather than a fixed charge. `coverFeeQuote` is `null` when no fee is required.
+
+To reconcile a payment, remember that `amount` was credited to the invoice and `coverFee` was
+charged on top of it:
+
+```php
+$payment = $invoice->payments[0];
+$payment->amount;   // "100.00" — applied to the balance
+$payment->coverFee; // "4.32"   — the fee the customer also paid
+// The customer was charged amount + coverFee.
+```
+
+`pay()` behaves the same way: the fee for the `payment_type` you pass is added to `amount`, so the
+card or bank account is debited more than the invoice is credited.
+
+Recurring invoices are templates that emit an invoice on a schedule. `cover_fee_required` is copied
+onto every invoice the template generates:
 
 ```php
 $template = $dime->invoices->createRecurring('000010', [
@@ -239,6 +283,7 @@ $template = $dime->invoices->createRecurring('000010', [
     'payment_terms'        => 'net_30',
     'recurring_frequency'  => 'Monthly', // Weekly | Biweekly | FirstFifteenth | Monthly | Yearly
     'recurring_start_date' => '2026-09-01',
+    'cover_fee_required'   => true,
     'lines'                => [
         ['item_id' => $item->id, 'name' => 'Retainer', 'quantity' => 1, 'unit_price' => 500],
     ],

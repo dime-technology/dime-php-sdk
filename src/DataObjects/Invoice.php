@@ -13,6 +13,10 @@ use DimePayments\Sdk\Support\Arr;
  *
  * The list endpoint returns a lighter shape; see {@see InvoiceSummary}.
  * Monetary values are preserved as strings to avoid float rounding.
+ *
+ * When `coverFeeRequired` is set the customer must also pay the processing fee,
+ * which is quoted on {@see CoverFeeQuote} rather than included in `total` — so
+ * what settles is more than what the invoice says. See that class for why.
  */
 final class Invoice
 {
@@ -35,6 +39,8 @@ final class Invoice
         public readonly ?string $amountPaid,
         public readonly ?string $balance,
         public readonly bool $allowPartialPayment,
+        public readonly bool $coverFeeRequired,
+        public readonly ?CoverFeeQuote $coverFeeQuote,
         public readonly ?string $thankYouNote,
         public readonly ?string $publicUrl,
         public readonly InvoiceCustomer $customer,
@@ -62,6 +68,10 @@ final class Invoice
             amountPaid: Arr::string($data, 'amount_paid'),
             balance: Arr::string($data, 'balance'),
             allowPartialPayment: Arr::bool($data, 'allow_partial_payment'),
+            coverFeeRequired: Arr::bool($data, 'cover_fee_required'),
+            coverFeeQuote: isset($data['cover_fee_quote']) && is_array($data['cover_fee_quote'])
+                ? CoverFeeQuote::fromArray($data['cover_fee_quote'])
+                : null,
             thankYouNote: Arr::string($data, 'thank_you_note'),
             publicUrl: Arr::string($data, 'public_url'),
             customer: InvoiceCustomer::fromArray(Arr::arrayFrom($data, ['customer'])),

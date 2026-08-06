@@ -67,6 +67,12 @@ final class Invoices extends AbstractResource
      * Create a draft invoice with its line items. Every line must reference a
      * Merchant `item_id`; the line name and unit price are snapshotted.
      *
+     * Set `cover_fee_required` to make the customer pay the processing fee. The fee
+     * is added on top of the invoice at payment time rather than becoming a line
+     * item, so `total` stays the amount owed to the merchant — read
+     * `$invoice->coverFeeQuote` for what the customer will actually be charged.
+     * Omit the field to inherit the Merchant's invoice setting.
+     *
      * @param  array{
      *     invoice_number?: string,
      *     customer_uuid?: string,
@@ -77,6 +83,7 @@ final class Invoices extends AbstractResource
      *     issue_date?: string,
      *     thank_you_note?: string,
      *     allow_partial_payment?: bool,
+     *     cover_fee_required?: bool,
      *     reminder_settings?: array<string, mixed>,
      *     lines: array<int, array{item_id: int|string, name: string, description?: string, quantity: int|float|string, unit_price: int|float|string}>
      * }  $attributes
@@ -102,6 +109,7 @@ final class Invoices extends AbstractResource
      *     issue_date?: string,
      *     thank_you_note?: string,
      *     allow_partial_payment?: bool,
+     *     cover_fee_required?: bool,
      *     reminder_settings?: array<string, mixed>,
      *     lines: array<int, array{item_id: int|string, name: string, description?: string, quantity: int|float|string, unit_price: int|float|string}>
      * }  $attributes
@@ -189,6 +197,12 @@ final class Invoices extends AbstractResource
      * charging a card (raw card or a stored `token`) or a bank account (ACH).
      * Omit `amount` to pay the full balance (partial amounts require the invoice
      * to allow them).
+     *
+     * On a cover-fee invoice the processing fee for `payment_type` is charged on
+     * top of `amount`, so the card or bank account is debited more than the invoice
+     * is credited. The invoice is credited `amount`; the fee appears as `coverFee`
+     * on the matching entry in `$invoice->payments`. Because the card and ACH rates
+     * differ, the same `amount` settles differently per `payment_type`.
      *
      * @param  array{
      *     payment_type: 'cc'|'ach',
@@ -356,10 +370,13 @@ final class Invoices extends AbstractResource
      * Create a recurring-invoice template. When `recurring_start_date` is today
      * the first invoice is generated and sent immediately.
      *
+     * `cover_fee_required` is copied onto every invoice the template generates.
+     *
      * @param  array{
      *     customer_uuid?: string,
      *     customer_id?: int|string,
      *     payment_terms: 'due_on_receipt'|'net_15'|'net_30'|'net_60',
+     *     cover_fee_required?: bool,
      *     recurring_frequency: 'Weekly'|'Biweekly'|'FirstFifteenth'|'Monthly'|'Yearly',
      *     recurring_start_date: string,
      *     recurring_end_date?: string,

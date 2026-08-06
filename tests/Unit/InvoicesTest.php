@@ -473,3 +473,107 @@ it('cancels a recurring invoice', function () {
         'data' => ['sid' => '000010', 'recurring_invoice_id' => 3],
     ]);
 });
+
+describe('required cover fees', function () {
+    /**
+     * A cover-fee invoice: the fee is quoted for both methods against the balance
+     * and is deliberately absent from `total`, which stays the merchant's amount.
+     *
+     * @return array<string, mixed>
+     */
+    $quotedInvoice = function (): array {
+        return array_merge(fullInvoice(), [
+            'subtotal' => 100,
+            'total' => 100,
+            'balance' => 100,
+            'cover_fee_required' => true,
+            'cover_fee_quote' => [
+                'basis' => 'balance',
+                'base' => 100,
+                'cc' => ['fee' => 4.32, 'total' => 104.32],
+                'ach' => ['fee' => 1.26, 'total' => 101.26],
+            ],
+            'payments' => [
+                ['amount' => 100, 'cover_fee' => 4.32, 'paid_at' => '2026-08-06T10:00:00-04:00', 'method' => '+CC', 'transaction_id' => 91],
+            ],
+        ]);
+    };
+
+    it('sends cover_fee_required on create', function () {
+        [$client, $history] = fakeClient([jsonResponse(['data' => fullInvoice()], 201)]);
+
+        $client->invoices->create('000010', [
+            'customer_uuid' => '9f2a6c14-3e8b-4d21-9a77-5c1e0b8f4d33',
+            'customer_name' => 'Jane Doe',
+            'customer_email' => 'jane@example.com',
+            'payment_terms' => 'net_15',
+            'cover_fee_required' => true,
+            'lines' => [['item_id' => 5, 'name' => 'Consulting', 'quantity' => 1, 'unit_price' => 100]],
+        ]);
+
+        expect(sentJson($history)['data']['cover_fee_required'])->toBeTrue();
+    });
+
+    it('sends cover_fee_required on a recurring template', function () {
+        [$client, $history] = fakeClient([jsonResponse(['data' => fullRecurringInvoice()], 201)]);
+
+        $client->invoices->createRecurring('000010', [
+            'customer_uuid' => '9f2a6c14-3e8b-4d21-9a77-5c1e0b8f4d33',
+            'payment_terms' => 'net_30',
+            'cover_fee_required' => true,
+            'recurring_frequency' => 'Monthly',
+            'recurring_start_date' => '2026-09-01',
+            'lines' => [['item_id' => 5, 'name' => 'Retainer', 'quantity' => 1, 'unit_price' => 500]],
+        ]);
+
+        expect(sentJson($history)['data']['cover_fee_required'])->toBeTrue();
+    });
+
+    it('parses the per-method quote and keeps it out of total', function () use ($quotedInvoice) {
+        [$client] = fakeClient([jsonResponse(['data' => $quotedInvoice()])]);
+
+        $invoice = $client->invoices->show('000010', 1);
+
+        expect($invoice->coverFeeRequired)->toBeTrue()
+            ->and($invoice->coverFeeQuote)->not->toBeNull()
+            ->and($invoice->coverFeeQuote->basis)->toBe('balance')
+            ->and($invoice->coverFeeQuote->base)->toBe('100')
+            ->and($invoice->coverFeeQuote->ccFee)->toBe('4.32')
+            ->and($invoice->coverFeeQuote->ccTotal)->toBe('104.32')
+            ->and($invoice->coverFeeQuote->achFee)->toBe('1.26')
+            ->and($invoice->coverFeeQuote->achTotal)->toBe('101.26')
+            // The merchant is still owed the invoice amount; the fee sits on top.
+            ->and($invoice->total)->toBe('100');
+    });
+
+    it('exposes the fee charged alongside the amount credited on a payment', function () use ($quotedInvoice) {
+        [$client] = fakeClient([jsonResponse(['data' => $quotedInvoice()])]);
+
+        $payment = $client->invoices->show('000010', 1)->payments[0];
+
+        // amount + coverFee is what the customer was actually charged.
+        expect($payment->amount)->toBe('100')
+            ->and($payment->coverFee)->toBe('4.32');
+    });
+
+    it('leaves the quote null when no fee is required', function () {
+        [$client] = fakeClient([jsonResponse(['data' => fullInvoice()])]);
+
+        $invoice = $client->invoices->show('000010', 1);
+
+        expect($invoice->coverFeeRequired)->toBeFalse()
+            ->and($invoice->coverFeeQuote)->toBeNull();
+    });
+
+    it('reads the flag off the list shape', function () {
+        [$client] = fakeClient([jsonResponse([
+            'data' => [['id' => 1, 'invoice_number' => 'INV-0001', 'status' => 'sent', 'cover_fee_required' => true]],
+            'meta' => [],
+        ])]);
+
+        $page = $client->invoices->list('000010');
+
+        expect($page->data[0])->toBeInstanceOf(InvoiceSummary::class)
+            ->and($page->data[0]->coverFeeRequired)->toBeTrue();
+    });
+});
