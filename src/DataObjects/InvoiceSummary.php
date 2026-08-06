@@ -11,7 +11,9 @@ use DimePayments\Sdk\Support\Arr;
  * the generated-invoice entries on a {@see RecurringInvoice}). For the full
  * invoice with line items, payments, and events see {@see Invoice}.
  *
- * Monetary values are preserved as strings to avoid float rounding.
+ * Monetary values are preserved as strings to avoid float rounding. The list
+ * shape carries only the `coverFeeRequired` flag; fetch the invoice to get the
+ * per-method fee quote.
  */
 final class InvoiceSummary
 {
@@ -27,6 +29,7 @@ final class InvoiceSummary
         public readonly ?string $issueDate,
         public readonly ?string $dueDate,
         public readonly bool $isOverdue,
+        public readonly bool $coverFeeRequired,
         public readonly ?string $publicUrl,
     ) {}
 
@@ -47,6 +50,7 @@ final class InvoiceSummary
             issueDate: Arr::string($data, 'issue_date'),
             dueDate: Arr::string($data, 'due_date'),
             isOverdue: Arr::bool($data, 'is_overdue'),
+            coverFeeRequired: Arr::bool($data, 'cover_fee_required'),
             publicUrl: Arr::string($data, 'public_url'),
         );
     }
