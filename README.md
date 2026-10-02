@@ -183,6 +183,10 @@ identifier the customer endpoints return. `customer_id` is still accepted for ol
 `void` or `refunded` — lowercase. To detect settlement, compare against `paid`; `partially_paid`
 means a payment landed but a balance remains, which `$invoice->balance` reports.
 
+`paid` is not always final. If the customer's bank returns an ACH payment, the invoice is reopened: it goes
+back to `partially_paid`, `viewed` or `sent`, with `$invoice->amountPaid` and `$invoice->balance` updated, and
+an `invoice_payment_returned` webhook fires. Re-read the invoice rather than caching a `paid` status forever.
+
 There is no `overdue` status. Being overdue is a property of an open invoice past its due date, so
 it reads as `$invoice->isOverdue`. `overdue` and `all` are accepted as *filter* values on `list()`
 alongside the real statuses.
