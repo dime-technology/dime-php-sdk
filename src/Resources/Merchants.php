@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace DimePayments\Sdk\Resources;
 
+use DimePayments\Sdk\DataObjects\ApplicationStatus;
 use DimePayments\Sdk\DataObjects\FormLink;
 use DimePayments\Sdk\DataObjects\Merchant;
 use DimePayments\Sdk\Pagination\CursorPage;
 
 /**
  * Merchant endpoints: listing, reading, creating, and updating merchant
- * accounts, plus fetching the hosted onboarding form link.
+ * accounts, plus fetching the hosted onboarding form link and following the
+ * merchant's onboarding status.
  *
  * The merchant `sid` is generated server-side on create; list and create take
- * no sid, while show, update, and get-form-link identify the merchant by `sid`
- * in the request's `data` envelope.
+ * no sid, while show, update, get-form-link, and application-status identify
+ * the merchant by `sid` in the request's `data` envelope.
  */
 final class Merchants extends AbstractResource
 {
@@ -93,5 +95,23 @@ final class Merchants extends AbstractResource
         $raw = $this->transport->request('GET', 'merchant/get-form-link', $this->envelope(['sid' => $sid]));
 
         return FormLink::fromArray($raw['data'] ?? []);
+    }
+
+    /**
+     * Fetch where a merchant sits in onboarding, from first contact through to
+     * being boarded and able to take money. Use it to follow up an application
+     * sent with {@see getFormLink()}. Available to affiliate keys, for their own
+     * merchants.
+     *
+     * Prefer the `application_status_changed` webhook, which carries the same
+     * fields and fires on every change; poll this only to reconcile after an
+     * outage. A link the merchant never opened leaves them on "lead",
+     * "discovery" or "proposal" — no status says an invitation is outstanding.
+     */
+    public function applicationStatus(string $sid): ApplicationStatus
+    {
+        $raw = $this->transport->request('GET', 'merchant/application-status', $this->envelope(['sid' => $sid]));
+
+        return ApplicationStatus::fromArray($raw['data'] ?? []);
     }
 }

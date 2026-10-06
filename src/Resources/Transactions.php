@@ -10,8 +10,8 @@ use DimePayments\Sdk\DataObjects\Transaction;
 use DimePayments\Sdk\Pagination\CursorPage;
 
 /**
- * Transaction endpoints: charging, tokenizing, refunding, voiding, and reading
- * transactions for a merchant.
+ * Transaction endpoints: charging, authorizing and capturing, tokenizing,
+ * refunding, voiding, and reading transactions for a merchant.
  *
  * Every method takes the merchant `$sid` explicitly; remaining fields are
  * passed in `$attributes` and merged into the request's `data` envelope. See
@@ -120,6 +120,63 @@ final class Transactions extends AbstractResource
         $raw = $this->transport->request('POST', 'transaction/charge-ach', $this->envelope(['sid' => $sid] + $attributes));
 
         return Transaction::fromArray($raw['data'] ?? []);
+    }
+
+    /**
+     * Authorize a card: place a hold for `amount` without moving any money.
+     * Supply the card either by `token` or by raw card details
+     * (`cardholder_name`, `card_number`, `expiration_date` and
+     * `billing_address.zip`); raw card details require the merchant to be PCI
+     * compliant.
+     *
+     * The returned `transactionNumber` is the handle on the hold: pass it to
+     * {@see capture()} to collect, or to {@see void()} with type "CC" to release
+     * it. Capture promptly — typically within 24 hours — since the issuer drops
+     * an uncaptured hold on its own schedule. Voiding needs its own API key
+     * ability.
+     *
+     * @param  array{
+     *     amount: int|float|string,
+     *     token?: string,
+     *     cardholder_name?: string,
+     *     card_number?: int|string,
+     *     expiration_date?: string,
+     *     cvv?: int|string,
+     *     phone?: string,
+     *     email?: string,
+     *     customer_uuid?: string,
+     *     memo?: string,
+     *     billing_address?: array<string, mixed>,
+     *     shipping_address?: array<string, mixed>
+     * }  $attributes
+     */
+    public function authorize(string $sid, array $attributes): Transaction
+    {
+        $raw = $this->transport->request('POST', 'transaction/authorize', $this->envelope(['sid' => $sid] + $attributes));
+
+        return Transaction::fromArray($raw['data'] ?? []);
+    }
+
+    /**
+     * Capture an authorization made with {@see authorize()}, moving the money.
+     * `$transactionId` is the authorization's `transactionNumber`. Omit
+     * `$amount` to capture the full authorized amount, or pass less to capture
+     * part of it.
+     *
+     * An authorization can be captured only once: a partial capture settles that
+     * amount and releases the rest of the hold. To collect in instalments,
+     * authorize each one separately. Once captured it is an ordinary card
+     * payment that can be refunded or voided.
+     */
+    public function capture(string $sid, int|string $transactionId, int|float|string|null $amount = null): MessageResult
+    {
+        $raw = $this->transport->request('POST', 'transaction/capture', $this->envelope([
+            'sid' => $sid,
+            'transaction_id' => $transactionId,
+            'amount' => $amount,
+        ]));
+
+        return MessageResult::fromArray($raw['data'] ?? $raw);
     }
 
     /**

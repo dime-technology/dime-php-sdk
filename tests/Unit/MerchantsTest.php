@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use DimePayments\Sdk\DataObjects\ApplicationStatus;
 use DimePayments\Sdk\DataObjects\FormLink;
 use DimePayments\Sdk\DataObjects\Merchant;
 
@@ -73,4 +74,52 @@ it('returns the hosted form link for a merchant', function () {
     expect(sentJson($history))->toBe([
         'data' => ['sid' => '000010'],
     ]);
+});
+
+it('returns a merchant\'s onboarding status', function () {
+    [$client, $history] = fakeClient([
+        jsonResponse(['data' => [
+            'sid' => '00069',
+            'name' => 'Acme Inc',
+            'status' => 'underwriting',
+            'application_status' => 'needs_documents',
+            'boarded' => false,
+            'application_submitted_at' => '2024-01-15T14:02:11+00:00',
+        ]]),
+    ]);
+
+    $status = $client->merchants->applicationStatus('00069');
+
+    expect($status)->toBeInstanceOf(ApplicationStatus::class)
+        ->and($status->sid)->toBe('00069')
+        ->and($status->name)->toBe('Acme Inc')
+        ->and($status->status)->toBe('underwriting')
+        ->and($status->applicationStatus)->toBe('needs_documents')
+        ->and($status->boarded)->toBeFalse()
+        ->and($status->applicationSubmittedAt)->toBe('2024-01-15T14:02:11+00:00');
+
+    expect($history[0]['request']->getMethod())->toBe('GET')
+        ->and($history[0]['request']->getUri()->getPath())->toBe('/api/merchant/application-status');
+    expect(sentJson($history))->toBe([
+        'data' => ['sid' => '00069'],
+    ]);
+});
+
+it('reads an application status that has not started as nulls', function () {
+    [$client] = fakeClient([
+        jsonResponse(['data' => [
+            'sid' => '00069',
+            'name' => 'Acme Inc',
+            'status' => 'lead',
+            'application_status' => null,
+            'boarded' => false,
+            'application_submitted_at' => null,
+        ]]),
+    ]);
+
+    $status = $client->merchants->applicationStatus('00069');
+
+    expect($status->status)->toBe('lead')
+        ->and($status->applicationStatus)->toBeNull()
+        ->and($status->applicationSubmittedAt)->toBeNull();
 });

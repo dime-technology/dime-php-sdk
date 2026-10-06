@@ -18,7 +18,8 @@ use Psr\Http\Message\ResponseInterface;
  *
  * Note: the Dime API accepts (and for read endpoints, expects) a JSON body on
  * GET requests, so this transport always sends the payload as a JSON body
- * regardless of HTTP method.
+ * regardless of HTTP method. The one exception is document upload, which is
+ * `multipart/form-data` and goes through {@see multipart()}.
  */
 final class Transport
 {
@@ -43,12 +44,7 @@ final class Transport
     public function request(string $method, string $path, array $body = [], array $query = []): array
     {
         $options = [
-            'headers' => [
-                'Authorization' => 'Bearer '.$this->config->token,
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-                'User-Agent' => $this->config->userAgent(),
-            ],
+            'headers' => $this->headers() + ['Content-Type' => 'application/json'],
         ];
 
         if ($body !== []) {
@@ -59,6 +55,45 @@ final class Transport
             $options['query'] = $query;
         }
 
+        return $this->execute($method, $path, $options);
+    }
+
+    /**
+     * Execute a `multipart/form-data` request (used for file uploads) and return
+     * the decoded JSON body. The multipart boundary sets the Content-Type, so no
+     * JSON header is sent.
+     *
+     * @param  array<int, array{name: string, contents: mixed, filename?: string}>  $multipart  Guzzle multipart parts.
+     * @return array<string, mixed>
+     */
+    public function multipart(string $method, string $path, array $multipart): array
+    {
+        return $this->execute($method, $path, [
+            'headers' => $this->headers(),
+            'multipart' => $multipart,
+        ]);
+    }
+
+    /**
+     * Headers sent on every request regardless of body encoding.
+     *
+     * @return array<string, string>
+     */
+    private function headers(): array
+    {
+        return [
+            'Authorization' => 'Bearer '.$this->config->token,
+            'Accept' => 'application/json',
+            'User-Agent' => $this->config->userAgent(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    private function execute(string $method, string $path, array $options): array
+    {
         $response = $this->send($method, ltrim($path, '/'), $options);
         $status = $response->getStatusCode();
         $decoded = $this->decode($response);

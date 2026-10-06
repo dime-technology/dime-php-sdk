@@ -7,12 +7,17 @@ namespace DimePayments\Sdk;
 use DimePayments\Sdk\Exceptions\DimeException;
 use DimePayments\Sdk\Http\Transport;
 use DimePayments\Sdk\Resources\Addresses;
+use DimePayments\Sdk\Resources\Chargebacks;
 use DimePayments\Sdk\Resources\Customers;
 use DimePayments\Sdk\Resources\Deposits;
+use DimePayments\Sdk\Resources\Documents;
+use DimePayments\Sdk\Resources\Funds;
 use DimePayments\Sdk\Resources\Invoices;
 use DimePayments\Sdk\Resources\Merchants;
 use DimePayments\Sdk\Resources\PaymentMethods;
 use DimePayments\Sdk\Resources\RecurringPayments;
+use DimePayments\Sdk\Resources\SubscriptionPlans;
+use DimePayments\Sdk\Resources\Subscriptions;
 use DimePayments\Sdk\Resources\Transactions;
 
 /**
@@ -48,6 +53,16 @@ final class Client
 
     public readonly Invoices $invoices;
 
+    public readonly SubscriptionPlans $subscriptionPlans;
+
+    public readonly Subscriptions $subscriptions;
+
+    public readonly Chargebacks $chargebacks;
+
+    public readonly Documents $documents;
+
+    public readonly Funds $funds;
+
     private readonly Config $config;
 
     /**
@@ -69,6 +84,11 @@ final class Client
         $this->deposits = new Deposits($transport);
         $this->recurringPayments = new RecurringPayments($transport);
         $this->invoices = new Invoices($transport);
+        $this->subscriptionPlans = new SubscriptionPlans($transport);
+        $this->subscriptions = new Subscriptions($transport);
+        $this->chargebacks = new Chargebacks($transport);
+        $this->documents = new Documents($transport);
+        $this->funds = new Funds($transport);
     }
 
     public function config(): Config

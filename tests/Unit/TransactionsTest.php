@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use DimePayments\Sdk\DataObjects\MessageResult;
 use DimePayments\Sdk\DataObjects\Transaction;
 
 it('charges a card and returns a typed transaction', function () {
@@ -86,5 +87,62 @@ it('voids a transaction', function () {
     expect($result->message)->toBe('Transaction voided successfully.');
     expect(sentJson($history))->toBe([
         'data' => ['sid' => '000010', 'transaction_type' => 'CC', 'transaction_id' => 42],
+    ]);
+});
+
+it('authorizes a card and returns the pending transaction', function () {
+    [$client, $history] = fakeClient([
+        jsonResponse(['data' => [
+            'transaction_type' => 'Credit Card',
+            'transaction_status' => 'Pending',
+            'transaction_number' => '1234567890',
+            'amount' => '100.50',
+            'pending' => true,
+        ]]),
+    ]);
+
+    $authorization = $client->transactions->authorize('000010', [
+        'amount' => 100.50,
+        'token' => 'tok_abc123',
+    ]);
+
+    expect($authorization)->toBeInstanceOf(Transaction::class)
+        ->and($authorization->transactionStatus)->toBe('Pending')
+        ->and($authorization->transactionNumber)->toBe('1234567890')
+        ->and($authorization->pending)->toBeTrue();
+
+    expect($history[0]['request']->getMethod())->toBe('POST')
+        ->and($history[0]['request']->getUri()->getPath())->toBe('/api/transaction/authorize');
+    expect(sentJson($history))->toBe([
+        'data' => ['sid' => '000010', 'amount' => 100.50, 'token' => 'tok_abc123'],
+    ]);
+});
+
+it('captures part of an authorization', function () {
+    [$client, $history] = fakeClient([
+        jsonResponse(['data' => ['message' => 'Transaction captured successfully.']]),
+    ]);
+
+    $result = $client->transactions->capture('000010', '1234567890', 80.25);
+
+    expect($result)->toBeInstanceOf(MessageResult::class)
+        ->and($result->message)->toBe('Transaction captured successfully.');
+
+    expect($history[0]['request']->getMethod())->toBe('POST')
+        ->and($history[0]['request']->getUri()->getPath())->toBe('/api/transaction/capture');
+    expect(sentJson($history))->toBe([
+        'data' => ['sid' => '000010', 'transaction_id' => '1234567890', 'amount' => 80.25],
+    ]);
+});
+
+it('captures the full authorized amount when none is given', function () {
+    [$client, $history] = fakeClient([
+        jsonResponse(['data' => ['message' => 'Transaction captured successfully.']]),
+    ]);
+
+    $client->transactions->capture('000010', 1234567890);
+
+    expect(sentJson($history))->toBe([
+        'data' => ['sid' => '000010', 'transaction_id' => 1234567890],
     ]);
 });
