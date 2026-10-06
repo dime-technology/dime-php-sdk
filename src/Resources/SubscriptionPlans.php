@@ -7,6 +7,7 @@ namespace DimePayments\Sdk\Resources;
 use DimePayments\Sdk\DataObjects\MessageResult;
 use DimePayments\Sdk\DataObjects\SubscribeResult;
 use DimePayments\Sdk\DataObjects\SubscriptionPlan;
+use DimePayments\Sdk\Exceptions\ApiException;
 use DimePayments\Sdk\Pagination\CursorPage;
 
 /**
@@ -21,10 +22,14 @@ use DimePayments\Sdk\Pagination\CursorPage;
 final class SubscriptionPlans extends AbstractResource
 {
     /**
-     * List subscription plans for a merchant, optionally filtered by status
-     * (draft, active, archived).
+     * List subscription plans for a merchant, newest first, optionally filtered
+     * by status.
      *
-     * @param  array{status?: string}  $filters
+     * Unlike most list endpoints, this one reads `status` from the `data`
+     * envelope rather than `filters`; the SDK sends it where the API expects it.
+     * An unrecognised status is ignored by the API and returns every plan.
+     *
+     * @param  array{status?: 'draft'|'active'|'archived'}  $filters
      * @return CursorPage<SubscriptionPlan>
      */
     public function list(string $sid, array $filters = []): CursorPage
@@ -32,7 +37,7 @@ final class SubscriptionPlans extends AbstractResource
         return $this->paginate(
             'GET',
             'subscription-plan/list',
-            $this->envelope(['sid' => $sid], $filters),
+            $this->envelope(['sid' => $sid] + $filters),
             static fn (array $item): SubscriptionPlan => SubscriptionPlan::fromArray($item),
         );
     }
@@ -47,48 +52,54 @@ final class SubscriptionPlans extends AbstractResource
             'subscription_plan_id' => $subscriptionPlanId,
         ]));
 
-        return SubscriptionPlan::fromArray($raw['data'] ?? $raw);
+        return SubscriptionPlan::fromArray($raw['data'] ?? []);
     }
 
     /**
      * Create a subscription plan. The plan is created as a draft; publish it
-     * (or use the merchant UI) before customers can subscribe.
+     * (or use the merchant UI) before customers can subscribe. Every line must
+     * reference a Merchant `item_id`; the line name and unit price are
+     * snapshotted onto the plan.
      *
      * @param  array{
      *     name: string,
      *     description?: string,
-     *     recurrence_schedule: string,
+     *     recurrence_schedule: 'Weekly'|'Biweekly'|'FirstFifteenth'|'Monthly'|'Yearly',
      *     allow_public?: bool,
-     *     lines: array<int, array{item_id: int|string, name: string, quantity: int|float|string, unit_price: int|float|string}>
+     *     lines: array<int, array{item_id: int|string, name: string, description?: string, quantity: int|float|string, unit_price: int|float|string}>
      * }  $attributes
      */
     public function create(string $sid, array $attributes): SubscriptionPlan
     {
         $raw = $this->transport->request('POST', 'subscription-plan/create', $this->envelope(['sid' => $sid] + $attributes));
 
-        return SubscriptionPlan::fromArray($raw['data'] ?? $raw);
+        return SubscriptionPlan::fromArray($raw['data'] ?? []);
     }
 
     /**
-     * Update a subscription plan. Replaces the plan's fields and line items
+     * Edit a subscription plan. Replaces the plan's fields and line items
      * wholesale; existing subscribers keep their own snapshot and are unaffected.
+     *
+     * Because the replacement is wholesale, send every field you want to keep:
+     * an omitted `description` is cleared and an omitted `allow_public` turns
+     * the plan's catalog listing off.
      *
      * @param  array{
      *     name: string,
      *     description?: string,
-     *     recurrence_schedule: string,
+     *     recurrence_schedule: 'Weekly'|'Biweekly'|'FirstFifteenth'|'Monthly'|'Yearly',
      *     allow_public?: bool,
-     *     lines: array<int, array{item_id: int|string, name: string, quantity: int|float|string, unit_price: int|float|string}>
+     *     lines: array<int, array{item_id: int|string, name: string, description?: string, quantity: int|float|string, unit_price: int|float|string}>
      * }  $attributes
      */
-    public function update(string $sid, int|string $subscriptionPlanId, array $attributes): SubscriptionPlan
+    public function edit(string $sid, int|string $subscriptionPlanId, array $attributes): SubscriptionPlan
     {
         $raw = $this->transport->request('PATCH', 'subscription-plan/edit', $this->envelope([
             'sid' => $sid,
             'subscription_plan_id' => $subscriptionPlanId,
         ] + $attributes));
 
-        return SubscriptionPlan::fromArray($raw['data'] ?? $raw);
+        return SubscriptionPlan::fromArray($raw['data'] ?? []);
     }
 
     /**
@@ -116,7 +127,7 @@ final class SubscriptionPlans extends AbstractResource
             'subscription_plan_id' => $subscriptionPlanId,
         ]));
 
-        return SubscriptionPlan::fromArray($raw['data'] ?? $raw);
+        return SubscriptionPlan::fromArray($raw['data'] ?? []);
     }
 
     /**
@@ -130,7 +141,7 @@ final class SubscriptionPlans extends AbstractResource
             'subscription_plan_id' => $subscriptionPlanId,
         ]));
 
-        return SubscriptionPlan::fromArray($raw['data'] ?? $raw);
+        return SubscriptionPlan::fromArray($raw['data'] ?? []);
     }
 
     /**
@@ -145,14 +156,19 @@ final class SubscriptionPlans extends AbstractResource
             'subscription_plan_id' => $subscriptionPlanId,
         ]));
 
-        return SubscriptionPlan::fromArray($raw['data'] ?? $raw);
+        return SubscriptionPlan::fromArray($raw['data'] ?? []);
     }
 
     /**
      * Subscribe a customer to a plan. Charges the first payment against the
-     * customer's saved payment method and enrolls them; the plan must be active.
+     * customer's saved payment method and enrolls them; the plan must be active
+     * and the payment method must belong to the customer.
      *
-     * @param  array{customer_uuid: string, payment_method: int}  $attributes
+     * A declined first charge enrolls no one and throws an {@see ApiException}
+     * (HTTP 422) whose response body carries the processor's `message` and the
+     * `transaction_number`.
+     *
+     * @param  array{customer_uuid: string, payment_method: int|string}  $attributes
      */
     public function subscribe(string $sid, int|string $subscriptionPlanId, array $attributes): SubscribeResult
     {
@@ -161,6 +177,6 @@ final class SubscriptionPlans extends AbstractResource
             'subscription_plan_id' => $subscriptionPlanId,
         ] + $attributes));
 
-        return SubscribeResult::fromArray($raw['data'] ?? $raw);
+        return SubscribeResult::fromArray($raw['data'] ?? []);
     }
 }

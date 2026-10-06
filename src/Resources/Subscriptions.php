@@ -6,6 +6,7 @@ namespace DimePayments\Sdk\Resources;
 
 use DimePayments\Sdk\DataObjects\Subscription;
 use DimePayments\Sdk\DataObjects\SubscriptionPlan;
+use DimePayments\Sdk\Exceptions\NotFoundException;
 use DimePayments\Sdk\Pagination\CursorPage;
 
 /**
@@ -21,10 +22,13 @@ use DimePayments\Sdk\Pagination\CursorPage;
 final class Subscriptions extends AbstractResource
 {
     /**
-     * List subscriptions for a merchant, optionally filtered by status (Active,
-     * Failed, Paused, Cancelled, Ended) or to a single customer.
+     * List subscriptions for a merchant, newest first, optionally filtered by
+     * status or to a single customer.
      *
-     * @param  array{status?: string, customer_uuid?: string}  $filters
+     * When nothing matches, the API answers 404, raised as a
+     * {@see NotFoundException}, rather than returning an empty page.
+     *
+     * @param  array{status?: 'Active'|'Failed'|'Paused'|'Cancelled'|'Ended', customer_uuid?: string}  $filters
      * @return CursorPage<Subscription>
      */
     public function list(string $sid, array $filters = []): CursorPage
@@ -47,12 +51,12 @@ final class Subscriptions extends AbstractResource
             'subscription_id' => $subscriptionId,
         ]));
 
-        return Subscription::fromArray($raw['data'] ?? $raw);
+        return Subscription::fromArray($raw['data'] ?? []);
     }
 
     /**
-     * Pause an active subscription, optionally until a given date. A null
-     * `$pauseUntilDate` is pruned by the envelope (pauses indefinitely).
+     * Pause an active subscription until `$pauseUntilDate` (a future date, e.g.
+     * "2026-09-01"), or indefinitely when it is omitted.
      */
     public function pause(string $sid, int|string $subscriptionId, ?string $pauseUntilDate = null): Subscription
     {
@@ -62,7 +66,7 @@ final class Subscriptions extends AbstractResource
             'pause_until_date' => $pauseUntilDate,
         ]));
 
-        return Subscription::fromArray($raw['data'] ?? $raw);
+        return Subscription::fromArray($raw['data'] ?? []);
     }
 
     /**
@@ -75,7 +79,7 @@ final class Subscriptions extends AbstractResource
             'subscription_id' => $subscriptionId,
         ]));
 
-        return Subscription::fromArray($raw['data'] ?? $raw);
+        return Subscription::fromArray($raw['data'] ?? []);
     }
 
     /**
@@ -89,6 +93,6 @@ final class Subscriptions extends AbstractResource
             'subscription_id' => $subscriptionId,
         ]));
 
-        return Subscription::fromArray($raw['data'] ?? $raw);
+        return Subscription::fromArray($raw['data'] ?? []);
     }
 }

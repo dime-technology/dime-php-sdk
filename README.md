@@ -65,16 +65,19 @@ in a `$filters` array). All amounts are returned as strings to avoid float round
 
 | Property                  | Endpoints                                                        |
 | ------------------------- | ---------------------------------------------------------------- |
-| `$dime->transactions`     | charge card/ACH, tokenize, refund, void, show, list              |
+| `$dime->transactions`     | charge card/ACH, authorize, capture, tokenize, refund, void, show, list |
 | `$dime->customers`        | list, show, create, update, delete                               |
 | `$dime->paymentMethods`   | list, show, create, update, delete                               |
-| `$dime->merchants`        | list, show, create, update, get onboarding form link            |
+| `$dime->merchants`        | list, show, create, update, get onboarding form link, application status |
 | `$dime->addresses`        | list, show, create, update, delete                               |
 | `$dime->deposits`         | list, list-with-transactions, show                               |
 | `$dime->recurringPayments`| list, show, create, edit, pause, cancel, activate, delete        |
 | `$dime->invoices`         | list, show, create, update, delete, send, markSent, void, duplicate, pay, link, addLineItem, updateLineItem, deleteLineItem, listItems, createItem, listRecurring, showRecurring, createRecurring, cancelRecurring |
-| `$dime->subscriptionPlans`| list, show, create, update, delete, publish, archive, unarchive, subscribe |
+| `$dime->subscriptionPlans`| list, show, create, edit, delete, publish, archive, unarchive, subscribe |
 | `$dime->subscriptions`    | list, show, pause, resume, cancel                                |
+| `$dime->chargebacks`      | list, show                                                       |
+| `$dime->documents`        | upload, list                                                     |
+| `$dime->funds`            | balance, transactions, release                                   |
 
 ### Transactions
 
@@ -117,9 +120,42 @@ $token = $dime->transactions->tokenizeCard('000010', [
 $dime->transactions->refund('000010', ['amount' => 25.00, 'transaction_info_id' => 123456]);
 $dime->transactions->void('000010', 'CC', 123456);
 
+// Authorize now, capture later. The hold's transactionNumber is the handle.
+$hold = $dime->transactions->authorize('000010', [
+    'amount' => 120.00,
+    'token'  => 'tok_abc123',
+]);
+
+$dime->transactions->capture('000010', $hold->transactionNumber);         // the full amount
+$dime->transactions->capture('000010', $hold->transactionNumber, 95.00);  // or part of it
+
+// Release a hold without taking any money
+$dime->transactions->void('000010', 'CC', $hold->transactionNumber);
+
 // Read
 $txn = $dime->transactions->show('000010', ['transaction_info_id' => 123456]);
 ```
+
+An authorization can be captured only once: capturing $95 of a $120 hold settles $95 and releases
+the other $25. To collect in instalments, authorize each one separately. Capture within about 24
+hours; the card issuer drops an uncaptured hold on its own schedule.
+
+### Merchant onboarding status
+
+```php
+$link = $dime->merchants->getFormLink('000010')->link; // send this to the merchant
+
+$status = $dime->merchants->applicationStatus('000010');
+$status->status;            // "underwriting"
+$status->applicationStatus; // "needs_documents": the one underwriting state that needs the merchant to act
+$status->boarded;           // true once they can take money
+```
+
+`status` runs `lead`, `discovery`, `proposal`, `application_in_progress`, `underwriting`, `live`
+(or `cancellation_pending`, `churned`, `declined`). A merchant who never opened the link stays on
+`lead`, `discovery` or `proposal`, so track outstanding invitations on your side. Rather than polling,
+subscribe to the `application_status_changed` webhook, which carries the same fields. Affiliate keys
+only.
 
 ### Customers, payment methods, addresses
 
@@ -296,6 +332,8 @@ $template = $dime->invoices->createRecurring('000010', [
 ]);
 
 $dime->invoices->cancelRecurring('000010', $template->id);
+```
+
 ### Subscription plans and subscriptions
 
 A **subscription plan** is a reusable recurring offering; a **subscription** is one
@@ -312,6 +350,17 @@ $plan = $dime->subscriptionPlans->create('000010', [
     'allow_public'        => true,         // list in the public catalog
     'lines'               => [
         ['item_id' => 5, 'name' => 'Base membership', 'quantity' => 1, 'unit_price' => 25.00],
+    ],
+]);
+
+// Edits replace the plan wholesale: resend description and allow_public to keep them
+$plan = $dime->subscriptionPlans->edit('000010', $plan->id, [
+    'name'                => 'Monthly Membership',
+    'description'         => 'Full access, billed monthly.',
+    'recurrence_schedule' => 'Monthly',
+    'allow_public'        => true,
+    'lines'               => [
+        ['item_id' => 5, 'name' => 'Base membership', 'quantity' => 1, 'unit_price' => 30.00],
     ],
 ]);
 
@@ -341,6 +390,79 @@ $dime->subscriptionPlans->unarchive('000010', $plan->id);
 $plans = $dime->subscriptionPlans->list('000010', ['status' => 'active']);
 $subs  = $dime->subscriptions->list('000010', ['status' => 'Active', 'customer_uuid' => $customer->uuid]);
 ```
+
+### Chargebacks and documents
+
+Chargebacks arrive in a daily file from the processor, so these endpoints reflect the latest import.
+Use the `chargeback_opened` / `chargeback_updated` / `chargeback_resolved` webhooks to hear about
+changes, and these to reconcile.
+
+```php
+$page = $dime->chargebacks->list('000010', [
+    'start_date' => '2026-09-01 00:00:00', // UTC; start and end go together
+    'end_date'   => '2026-09-30 23:59:59',
+]);
+
+$chargeback = $dime->chargebacks->show('000010', $page->data[0]->transactionInfoId);
+$chargeback->chargebackAmount; // "391.48"
+$chargeback->resolved;         // false
+```
+
+Documents go up as `multipart/form-data`, which the SDK builds for you. Pass file paths, or
+`['contents' => ..., 'filename' => ...]` for content you already hold in memory or a stream. Up to
+10 files per call, each 9 MB or smaller (PDF, JPG, PNG, DOC, DOCX or RTF).
+
+```php
+// Contest a chargeback
+$result = $dime->documents->upload('000010', [
+    'doc_type'                       => 'RetrievalRequest', // Verification | FraudHolds | Underwriting | RetrievalRequest
+    'chargeback_transaction_info_id' => $chargeback->transactionInfoId,
+], [
+    '/path/to/receipt.pdf',
+    ['contents' => $pdfBytes, 'filename' => 'delivery-confirmation.pdf'],
+]);
+
+foreach ($result->failed as $failure) {
+    // The rest of the batch was kept; re-send just these
+    echo $failure->fileName, ': ', $failure->reason, PHP_EOL;
+}
+
+$documents = $dime->documents->list('000010', ['doc_type' => 'RetrievalRequest']);
+```
+
+Uploading does not send anything to the processor: Dime's team reviews the documents and forwards
+them, and `$document->sentToProcessorAt` is set once they do.
+
+### Held funds
+
+For merchants on a tier that holds their money rather than sweeping it to their bank each day.
+Every other merchant gets a 422 (`ApiException`) from these endpoints.
+
+```php
+$balance = $dime->funds->balance('000010');
+$balance->releasable; // "5172.72": the figure a release is checked against
+
+// The payments that can be released now (up to 500, newest first)
+$releasable = $dime->funds->transactions('000010');
+
+// Release by amount or by transaction_info_ids. Releasing needs an affiliate key.
+$result = $dime->funds->release('000010', [
+    'amount'          => 1500.00,
+    'idempotency_key' => 'payout-2026-09-25-0001', // fresh per release; reuse it on retry
+]);
+
+$result->release->status;        // "released" (sent), "failed" (declined, nothing moved) or "unknown"
+$result->release->failureReason; // why, when it failed
+```
+
+Always send an `idempotency_key`, fresh per intended release. If a call times out, retry it with the
+same key: you get the original release back (with `$result->replayed` set) instead of paying out twice.
+An `unknown` release may have gone through; its amount is held back from `releasable` until it is
+reconciled.
+
+A `failed` release is returned rather than thrown, because it was recorded. A release refused outright
+(over `releasable`, ineligible payments, a reused key, or another release already in flight) throws an
+`ApiException`, with any ineligible payments in `$e->getResponseBody()['data']['ineligible']`.
 
 ## Pagination
 
@@ -408,6 +530,8 @@ try {
 - **No API versioning.** Endpoints live under `/api` with no version prefix.
 - A handful of list endpoints (customers, merchants) return their collection without the
   `links`/`meta` block; `CursorPage` degrades gracefully (items are returned, `hasMore()` is false).
+- Some list endpoints (chargebacks, subscriptions, documents) answer 404 instead of an empty list when
+  nothing matches. Catch `NotFoundException` where an empty result is expected.
 
 ## Development
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use DimePayments\Sdk\DataObjects\Subscription;
 use DimePayments\Sdk\DataObjects\SubscriptionPaymentMethod;
+use DimePayments\Sdk\Exceptions\NotFoundException;
 
 /**
  * The subscription shape returned by show/pause/resume/cancel (includes items).
@@ -106,21 +107,6 @@ it('shows a subscription with its payment method and items', function () {
     ]);
 });
 
-it('parses a show response returned WITHOUT a data wrapper', function () {
-    // The live subscription endpoints return the resource at the top level,
-    // not nested under `data`. The SDK must handle both shapes.
-    [$client] = fakeClient([jsonResponse(fullSubscription())]);
-
-    $subscription = $client->subscriptions->show('000010', 6);
-
-    expect($subscription)->toBeInstanceOf(Subscription::class)
-        ->and($subscription->id)->toBe(1)
-        ->and($subscription->planName)->toBe('Monthly Membership')
-        ->and($subscription->amount)->toBe('10.00')
-        ->and($subscription->paymentMethod->lastFour)->toBe('1111')
-        ->and($subscription->items)->toHaveCount(1);
-});
-
 it('pauses a subscription with an optional resume date', function () {
     [$client, $history] = fakeClient([jsonResponse(['data' => fullSubscription()])]);
 
@@ -167,3 +153,30 @@ it('cancels a subscription with a PATCH', function () {
         'data' => ['sid' => '000010', 'subscription_id' => 42],
     ]);
 });
+
+it('reads the bank fields of an ACH payment method', function () {
+    $subscription = fullSubscription();
+    $subscription['payment_method'] = [
+        'id' => 5601,
+        'type' => 'ach',
+        'bank_name' => 'First Bank',
+        'account_type' => 'Checking',
+    ];
+
+    [$client] = fakeClient([jsonResponse(['data' => $subscription])]);
+
+    $paymentMethod = $client->subscriptions->show('000010', 42)->paymentMethod;
+
+    expect($paymentMethod->type)->toBe('ach')
+        ->and($paymentMethod->bankName)->toBe('First Bank')
+        ->and($paymentMethod->accountType)->toBe('Checking')
+        ->and($paymentMethod->lastFour)->toBeNull();
+});
+
+it('raises NotFoundException when no subscriptions match', function () {
+    [$client] = fakeClient([
+        jsonResponse(['data' => ['message' => 'No subscriptions found']], 404),
+    ]);
+
+    $client->subscriptions->list('000010', ['status' => 'Paused']);
+})->throws(NotFoundException::class, 'No subscriptions found');

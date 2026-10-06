@@ -56,14 +56,13 @@ it('lists subscription plans and paginates across cursors', function () {
     expect($all)->toHaveCount(2);
 });
 
-it('sends the data/filters envelope when listing plans', function () {
+it('sends the status filter inside data, where the plan list endpoint reads it', function () {
     [$client, $history] = fakeClient([jsonResponse(['data' => [], 'meta' => []])]);
 
     $client->subscriptionPlans->list('000010', ['status' => 'active']);
 
     expect(sentJson($history))->toBe([
-        'data' => ['sid' => '000010'],
-        'filters' => ['status' => 'active'],
+        'data' => ['sid' => '000010', 'status' => 'active'],
     ]);
 });
 
@@ -83,21 +82,6 @@ it('shows a subscription plan with its items', function () {
     expect(sentJson($history))->toBe([
         'data' => ['sid' => '000010', 'subscription_plan_id' => 42],
     ]);
-});
-
-it('parses a show response returned WITHOUT a data wrapper', function () {
-    // The live subscription endpoints return the resource at the top level,
-    // unlike the rest of the API (which nests it under `data`). The SDK must
-    // handle both shapes.
-    [$client] = fakeClient([jsonResponse(fullSubscriptionPlan())]);
-
-    $plan = $client->subscriptionPlans->show('000010', 13);
-
-    expect($plan)->toBeInstanceOf(SubscriptionPlan::class)
-        ->and($plan->id)->toBe(1)
-        ->and($plan->name)->toBe('Monthly Membership')
-        ->and($plan->total)->toBe('20')
-        ->and($plan->items)->toHaveCount(1);
 });
 
 it('creates a subscription plan and sends the line items', function () {
@@ -124,10 +108,10 @@ it('creates a subscription plan and sends the line items', function () {
         ]);
 });
 
-it('updates a plan with a PATCH and the id merged into data', function () {
+it('edits a plan with a PATCH and the id merged into data', function () {
     [$client, $history] = fakeClient([jsonResponse(['data' => fullSubscriptionPlan()])]);
 
-    $client->subscriptionPlans->update('000010', 42, [
+    $client->subscriptionPlans->edit('000010', 42, [
         'name' => 'Monthly Membership',
         'recurrence_schedule' => 'Yearly',
         'lines' => [['item_id' => 5, 'name' => 'Base', 'quantity' => 1, 'unit_price' => 25]],
