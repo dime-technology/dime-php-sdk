@@ -6,7 +6,6 @@ namespace DimePayments\Sdk\Resources;
 
 use DimePayments\Sdk\DataObjects\Subscription;
 use DimePayments\Sdk\DataObjects\SubscriptionPlan;
-use DimePayments\Sdk\Exceptions\NotFoundException;
 use DimePayments\Sdk\Pagination\CursorPage;
 
 /**
@@ -25,8 +24,7 @@ final class Subscriptions extends AbstractResource
      * List subscriptions for a merchant, newest first, optionally filtered by
      * status or to a single customer.
      *
-     * When nothing matches, the API answers 404, raised as a
-     * {@see NotFoundException}, rather than returning an empty page.
+     * A merchant with no subscriptions returns an empty page, not an error.
      *
      * @param  array{status?: 'Active'|'Failed'|'Paused'|'Cancelled'|'Ended', customer_uuid?: string}  $filters
      * @return CursorPage<Subscription>

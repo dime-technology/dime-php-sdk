@@ -530,8 +530,9 @@ try {
 - **No API versioning.** Endpoints live under `/api` with no version prefix.
 - A handful of list endpoints (customers, merchants) return their collection without the
   `links`/`meta` block; `CursorPage` degrades gracefully (items are returned, `hasMore()` is false).
-- Some list endpoints (chargebacks, subscriptions, documents) answer 404 instead of an empty list when
-  nothing matches. Catch `NotFoundException` where an empty result is expected.
+- **The chargeback, document and subscription lists return an empty page when nothing matches,
+  not an error.** The older endpoints still answer 404 in that case — `transactions`,
+  `deposits`, `recurringPayments` and `addresses` — so catch `NotFoundException` around those.
 
 ## Development
 

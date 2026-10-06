@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use DimePayments\Sdk\DataObjects\Chargeback;
-use DimePayments\Sdk\Exceptions\NotFoundException;
 
 /**
  * The chargeback shape returned by list and show.
@@ -97,10 +96,19 @@ it('shows a chargeback, sending its id as a string', function () {
     ]);
 });
 
-it('raises NotFoundException when no chargebacks match', function () {
+it('returns an empty page when no chargebacks match', function () {
     [$client] = fakeClient([
-        jsonResponse(['data' => ['message' => 'No chargebacks found']], 404),
+        jsonResponse([
+            'data' => [],
+            'links' => ['prev' => null, 'next' => null],
+            'meta' => ['per_page' => 500, 'next_cursor' => null, 'prev_cursor' => null],
+        ]),
     ]);
 
-    $client->chargebacks->list('000010');
-})->throws(NotFoundException::class, 'No chargebacks found');
+    $page = $client->chargebacks->list('000010');
+
+    expect($page->data)->toBe([])
+        ->and($page)->toHaveCount(0)
+        ->and($page->hasMore())->toBeFalse()
+        ->and(iterator_to_array($page->autoPaging()))->toBe([]);
+});

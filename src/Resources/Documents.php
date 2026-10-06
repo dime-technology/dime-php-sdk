@@ -6,7 +6,6 @@ namespace DimePayments\Sdk\Resources;
 
 use DimePayments\Sdk\DataObjects\Document;
 use DimePayments\Sdk\DataObjects\DocumentUploadResult;
-use DimePayments\Sdk\Exceptions\NotFoundException;
 use InvalidArgumentException;
 use Psr\Http\Message\StreamInterface;
 
@@ -72,8 +71,7 @@ final class Documents extends AbstractResource
      * and those added by Dime's team or through the merchant application. This
      * endpoint is not paginated.
      *
-     * When there are none (or none match), the API answers 404, raised as a
-     * {@see NotFoundException}, rather than returning an empty list.
+     * A merchant with no documents returns an empty list, not an error.
      *
      * @param  array{
      *     doc_type?: 'Verification'|'FraudHolds'|'Underwriting'|'RetrievalRequest',

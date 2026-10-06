@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use DimePayments\Sdk\DataObjects\Document;
 use DimePayments\Sdk\DataObjects\DocumentUploadResult;
-use DimePayments\Sdk\Exceptions\NotFoundException;
 use Psr\Http\Message\RequestInterface;
 
 it('uploads documents as multipart form data with bracketed field names', function () {
@@ -134,10 +133,10 @@ it('lists documents with filters', function () {
     ]);
 });
 
-it('raises NotFoundException when the merchant has no documents', function () {
+it('returns an empty list when the merchant has no documents', function () {
     [$client] = fakeClient([
-        jsonResponse(['data' => ['message' => 'No documents found']], 404),
+        jsonResponse(['data' => []]),
     ]);
 
-    $client->documents->list('000010');
-})->throws(NotFoundException::class, 'No documents found');
+    expect($client->documents->list('000010'))->toBe([]);
+});

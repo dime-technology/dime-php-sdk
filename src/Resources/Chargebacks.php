@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace DimePayments\Sdk\Resources;
 
 use DimePayments\Sdk\DataObjects\Chargeback;
-use DimePayments\Sdk\Exceptions\NotFoundException;
 use DimePayments\Sdk\Pagination\CursorPage;
 
 /**
@@ -26,8 +25,7 @@ final class Chargebacks extends AbstractResource
      * List chargebacks for a merchant, oldest first. `start_date` and
      * `end_date` ("YYYY-mm-dd HH:ii:ss", UTC) must be given together.
      *
-     * When nothing matches, the API answers 404, raised as a
-     * {@see NotFoundException}, rather than returning an empty page.
+     * A merchant with no chargebacks returns an empty page, not an error.
      *
      * @param  array{start_date?: string, end_date?: string, representment_status?: string}  $filters
      * @return CursorPage<Chargeback>
