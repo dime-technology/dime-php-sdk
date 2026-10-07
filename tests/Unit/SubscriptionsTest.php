@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use DimePayments\Sdk\DataObjects\Subscription;
 use DimePayments\Sdk\DataObjects\SubscriptionPaymentMethod;
-use DimePayments\Sdk\Exceptions\NotFoundException;
 
 /**
  * The subscription shape returned by show/pause/resume/cancel (includes items).
@@ -173,10 +172,18 @@ it('reads the bank fields of an ACH payment method', function () {
         ->and($paymentMethod->lastFour)->toBeNull();
 });
 
-it('raises NotFoundException when no subscriptions match', function () {
+it('returns an empty page when no subscriptions match', function () {
     [$client] = fakeClient([
-        jsonResponse(['data' => ['message' => 'No subscriptions found']], 404),
+        jsonResponse([
+            'data' => [],
+            'links' => ['prev' => null, 'next' => null],
+            'meta' => ['per_page' => 500, 'next_cursor' => null, 'prev_cursor' => null],
+        ]),
     ]);
 
-    $client->subscriptions->list('000010', ['status' => 'Paused']);
-})->throws(NotFoundException::class, 'No subscriptions found');
+    $page = $client->subscriptions->list('000010', ['status' => 'Paused']);
+
+    expect($page->data)->toBe([])
+        ->and($page)->toHaveCount(0)
+        ->and($page->hasMore())->toBeFalse();
+});
