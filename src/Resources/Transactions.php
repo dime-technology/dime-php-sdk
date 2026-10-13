@@ -16,6 +16,12 @@ use DimePayments\Sdk\Pagination\CursorPage;
  * Every method takes the merchant `$sid` explicitly; remaining fields are
  * passed in `$attributes` and merged into the request's `data` envelope. See
  * each method's array shape for the accepted keys.
+ *
+ * The methods that move money (charge, authorize, capture, refund, void) take
+ * an optional `$idempotencyKey`. Pass your own to make a retry of yours safe:
+ * the same key and request get the first response back instead of a second
+ * charge. Without one, a random key is used for the call, which keeps the
+ * SDK's own automatic retries safe.
  */
 final class Transactions extends AbstractResource
 {
@@ -68,9 +74,9 @@ final class Transactions extends AbstractResource
      *     shipping_address_enabled?: bool
      * }  $attributes
      */
-    public function chargeCard(string $sid, array $attributes): Transaction
+    public function chargeCard(string $sid, array $attributes, ?string $idempotencyKey = null): Transaction
     {
-        $raw = $this->transport->request('POST', 'transaction/charge-card', $this->envelope(['sid' => $sid] + $attributes));
+        $raw = $this->transport->request('POST', 'transaction/charge-card', $this->envelope(['sid' => $sid] + $attributes), headers: self::idempotencyHeaders($idempotencyKey));
 
         return Transaction::fromArray($raw['data'] ?? []);
     }
@@ -91,9 +97,9 @@ final class Transactions extends AbstractResource
      *     billing_address?: array<string, mixed>
      * }  $attributes
      */
-    public function chargeCardToken(string $sid, array $attributes): Transaction
+    public function chargeCardToken(string $sid, array $attributes, ?string $idempotencyKey = null): Transaction
     {
-        $raw = $this->transport->request('POST', 'transaction/charge-card-token', $this->envelope(['sid' => $sid] + $attributes));
+        $raw = $this->transport->request('POST', 'transaction/charge-card-token', $this->envelope(['sid' => $sid] + $attributes), headers: self::idempotencyHeaders($idempotencyKey));
 
         return Transaction::fromArray($raw['data'] ?? []);
     }
@@ -115,9 +121,9 @@ final class Transactions extends AbstractResource
      *     shipping_address?: array<string, mixed>
      * }  $attributes
      */
-    public function chargeAch(string $sid, array $attributes): Transaction
+    public function chargeAch(string $sid, array $attributes, ?string $idempotencyKey = null): Transaction
     {
-        $raw = $this->transport->request('POST', 'transaction/charge-ach', $this->envelope(['sid' => $sid] + $attributes));
+        $raw = $this->transport->request('POST', 'transaction/charge-ach', $this->envelope(['sid' => $sid] + $attributes), headers: self::idempotencyHeaders($idempotencyKey));
 
         return Transaction::fromArray($raw['data'] ?? []);
     }
@@ -150,9 +156,9 @@ final class Transactions extends AbstractResource
      *     shipping_address?: array<string, mixed>
      * }  $attributes
      */
-    public function authorize(string $sid, array $attributes): Transaction
+    public function authorize(string $sid, array $attributes, ?string $idempotencyKey = null): Transaction
     {
-        $raw = $this->transport->request('POST', 'transaction/authorize', $this->envelope(['sid' => $sid] + $attributes));
+        $raw = $this->transport->request('POST', 'transaction/authorize', $this->envelope(['sid' => $sid] + $attributes), headers: self::idempotencyHeaders($idempotencyKey));
 
         return Transaction::fromArray($raw['data'] ?? []);
     }
@@ -168,13 +174,13 @@ final class Transactions extends AbstractResource
      * authorize each one separately. Once captured it is an ordinary card
      * payment that can be refunded or voided.
      */
-    public function capture(string $sid, int|string $transactionId, int|float|string|null $amount = null): MessageResult
+    public function capture(string $sid, int|string $transactionId, int|float|string|null $amount = null, ?string $idempotencyKey = null): MessageResult
     {
         $raw = $this->transport->request('POST', 'transaction/capture', $this->envelope([
             'sid' => $sid,
             'transaction_id' => $transactionId,
             'amount' => $amount,
-        ]));
+        ]), headers: self::idempotencyHeaders($idempotencyKey));
 
         return MessageResult::fromArray($raw['data'] ?? $raw);
     }
@@ -208,9 +214,9 @@ final class Transactions extends AbstractResource
      *     transaction_type?: string
      * }  $attributes
      */
-    public function refund(string $sid, array $attributes): MessageResult
+    public function refund(string $sid, array $attributes, ?string $idempotencyKey = null): MessageResult
     {
-        $raw = $this->transport->request('POST', 'transaction/refund', $this->envelope(['sid' => $sid] + $attributes));
+        $raw = $this->transport->request('POST', 'transaction/refund', $this->envelope(['sid' => $sid] + $attributes), headers: self::idempotencyHeaders($idempotencyKey));
 
         return MessageResult::fromArray($raw['data'] ?? $raw);
     }
@@ -218,13 +224,13 @@ final class Transactions extends AbstractResource
     /**
      * Void a transaction (immediate reversal, no waiting period).
      */
-    public function void(string $sid, string $transactionType, int|string $transactionId): MessageResult
+    public function void(string $sid, string $transactionType, int|string $transactionId, ?string $idempotencyKey = null): MessageResult
     {
         $raw = $this->transport->request('PATCH', 'transaction/void', $this->envelope([
             'sid' => $sid,
             'transaction_type' => $transactionType,
             'transaction_id' => $transactionId,
-        ]));
+        ]), headers: self::idempotencyHeaders($idempotencyKey));
 
         return MessageResult::fromArray($raw['data'] ?? $raw);
     }

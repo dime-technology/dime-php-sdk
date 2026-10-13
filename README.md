@@ -136,6 +136,30 @@ $dime->transactions->void('000010', 'CC', $hold->transactionNumber);
 $txn = $dime->transactions->show('000010', ['transaction_info_id' => 123456]);
 ```
 
+#### Retrying safely: idempotency keys
+
+Charging, authorizing, capturing, refunding and voiding take an optional last argument,
+`idempotencyKey`. Send a unique value per payment you intend to make, and the same value again if
+you retry it: the API answers the retry with the first response (it is not processed twice), so a
+call that timed out can be retried without charging the customer twice.
+
+```php
+$txn = $dime->transactions->chargeCard('000010', [
+    'amount' => 100.00,
+    'token'  => 'tok_abc123',
+], idempotencyKey: 'order-1234');
+
+// Safe to repeat after a timeout: the same key returns the original charge.
+$txn = $dime->transactions->chargeCard('000010', [
+    'amount' => 100.00,
+    'token'  => 'tok_abc123',
+], idempotencyKey: 'order-1234');
+```
+
+Without a key, the SDK generates one for the call, so its own automatic retries are safe too. A key
+reused for a different request, or retried while the first request is still running, throws
+`IdempotencyException` (HTTP 422 or 409) and nothing is processed. Keys are kept for 7 days.
+
 An authorization can be captured only once: capturing $95 of a $120 hold settles $95 and releases
 the other $25. To collect in instalments, authorize each one separately. Capture within about 24
 hours; the card issuer drops an uncaptured hold on its own schedule.
@@ -519,6 +543,7 @@ try {
 | `PermissionDeniedException`  | HTTP 403 (`belongs-to-company` guard)                      |
 | `NotFoundException`          | HTTP 404                                                    |
 | `RateLimitException`         | HTTP 429 (carries `Retry-After`)                           |
+| `IdempotencyException`       | HTTP 409/422 about an `Idempotency-Key` (still running, or reused for a different request) |
 | `ServerException`            | HTTP 5xx                                                    |
 | `ConnectionException`        | No HTTP response (DNS, timeout, TLS)                        |
 | `ApiException`               | Any other non-2xx                                          |

@@ -39,12 +39,15 @@ final class Transport
      *
      * @param  array<string, mixed>  $body  Request payload (sent as a JSON body).
      * @param  array<string, scalar>  $query  Query string parameters (e.g. pagination cursor).
+     * @param  array<string, string>  $headers  Extra headers for this request only. They are sent on
+     *                                          every retry of it, which is what keeps an `Idempotency-Key`
+     *                                          the same across the SDK's own retries.
      * @return array<string, mixed>
      */
-    public function request(string $method, string $path, array $body = [], array $query = []): array
+    public function request(string $method, string $path, array $body = [], array $query = [], array $headers = []): array
     {
         $options = [
-            'headers' => $this->headers() + ['Content-Type' => 'application/json'],
+            'headers' => $headers + $this->headers() + ['Content-Type' => 'application/json'],
         ];
 
         if ($body !== []) {

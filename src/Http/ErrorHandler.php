@@ -6,6 +6,7 @@ namespace DimePayments\Sdk\Http;
 
 use DimePayments\Sdk\Exceptions\ApiException;
 use DimePayments\Sdk\Exceptions\AuthenticationException;
+use DimePayments\Sdk\Exceptions\IdempotencyException;
 use DimePayments\Sdk\Exceptions\NotFoundException;
 use DimePayments\Sdk\Exceptions\PermissionDeniedException;
 use DimePayments\Sdk\Exceptions\RateLimitException;
@@ -39,6 +40,12 @@ final class ErrorHandler
         }
 
         $message = self::extractMessage($body) ?? "Dime API request failed with status {$status}.";
+
+        // A 409 or 422 about the Idempotency-Key, told apart by its message: merchant
+        // create also answers 409, for a likely duplicate, and that stays an ApiException.
+        if (in_array($status, [409, 422], true) && str_contains($message, 'Idempotency-Key')) {
+            throw new IdempotencyException($message, $status, $body);
+        }
 
         throw match (true) {
             $status === 401 => new AuthenticationException($message, $status, $body),
