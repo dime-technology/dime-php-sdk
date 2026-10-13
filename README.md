@@ -164,6 +164,44 @@ An authorization can be captured only once: capturing $95 of a $120 hold settles
 the other $25. To collect in instalments, authorize each one separately. Capture within about 24
 hours; the card issuer drops an uncaptured hold on its own schedule.
 
+#### What a capture returns
+
+`capture()` returns a `CaptureResult` (v1.5.0+), which says what was taken. It extends
+`MessageResult`, so `->message` still works. Amounts are two-decimal strings.
+
+```php
+use DimePayments\Sdk\Exceptions\CaptureException;
+
+try {
+    $capture = $dime->transactions->capture('000010', $hold->transactionNumber, 95.00);
+
+    $capture->authorizedAmount; // "120.00"
+    $capture->capturedAmount;   // "95.00"
+    $capture->status;           // "captured"
+    $capture->capturedAt;       // "2026-10-13T15:02:11-04:00"
+} catch (CaptureException $e) {
+    $e->errorCode; // "already_captured", "voided", "processor_declined", ...
+    $e->reason;    // on processor_declined only: why it was refused
+}
+```
+
+A refused capture throws `CaptureException`, a subclass of `ApiException`. Several refusals share
+one message, so branch on `errorCode`:
+
+| `errorCode`                    | Meaning                                                              |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `not_found`                    | No transaction with that number for this merchant                    |
+| `already_captured`             | The money was already taken, by an earlier capture or a sale         |
+| `voided`                       | The authorization was voided                                         |
+| `refunded`                     | The transaction was refunded                                         |
+| `authorization_declined`       | The authorization itself was declined, so nothing was held           |
+| `not_an_authorization`         | Not an open card authorization (an ACH payment, for example)         |
+| `amount_exceeds_authorization` | The amount is more than the hold                                     |
+| `processor_declined`           | Refused when sent; `reason` says why. An expired hold ends up here   |
+
+A code the SDK doesn't list yet is passed through as given. Field validation errors still throw
+`ValidationException`.
+
 ### Merchant onboarding status
 
 ```php
@@ -544,6 +582,7 @@ try {
 | `NotFoundException`          | HTTP 404                                                    |
 | `RateLimitException`         | HTTP 429 (carries `Retry-After`)                           |
 | `IdempotencyException`       | HTTP 409/422 about an `Idempotency-Key` (still running, or reused for a different request) |
+| `CaptureException`           | A refused capture; `errorCode` says why (an `ApiException`) |
 | `ServerException`            | HTTP 5xx                                                    |
 | `ConnectionException`        | No HTTP response (DNS, timeout, TLS)                        |
 | `ApiException`               | Any other non-2xx                                          |

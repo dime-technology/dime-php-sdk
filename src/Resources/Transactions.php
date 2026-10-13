@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace DimePayments\Sdk\Resources;
 
+use DimePayments\Sdk\DataObjects\CaptureResult;
 use DimePayments\Sdk\DataObjects\MessageResult;
 use DimePayments\Sdk\DataObjects\TokenizeResult;
 use DimePayments\Sdk\DataObjects\Transaction;
+use DimePayments\Sdk\Exceptions\ApiException;
+use DimePayments\Sdk\Exceptions\CaptureException;
 use DimePayments\Sdk\Pagination\CursorPage;
 
 /**
@@ -173,16 +176,48 @@ final class Transactions extends AbstractResource
      * amount and releases the rest of the hold. To collect in instalments,
      * authorize each one separately. Once captured it is an ordinary card
      * payment that can be refunded or voided.
+     *
+     * Returns what was captured. A refused capture throws {@see CaptureException},
+     * whose `errorCode` says why (`already_captured`, `voided`,
+     * `processor_declined`, ...).
+     *
+     * @throws CaptureException
      */
-    public function capture(string $sid, int|string $transactionId, int|float|string|null $amount = null, ?string $idempotencyKey = null): MessageResult
+    public function capture(string $sid, int|string $transactionId, int|float|string|null $amount = null, ?string $idempotencyKey = null): CaptureResult
     {
-        $raw = $this->transport->request('POST', 'transaction/capture', $this->envelope([
-            'sid' => $sid,
-            'transaction_id' => $transactionId,
-            'amount' => $amount,
-        ]), headers: self::idempotencyHeaders($idempotencyKey));
+        try {
+            $raw = $this->transport->request('POST', 'transaction/capture', $this->envelope([
+                'sid' => $sid,
+                'transaction_id' => $transactionId,
+                'amount' => $amount,
+            ]), headers: self::idempotencyHeaders($idempotencyKey));
+        } catch (ApiException $e) {
+            throw self::captureException($e) ?? $e;
+        }
 
-        return MessageResult::fromArray($raw['data'] ?? $raw);
+        return CaptureResult::fromArray($raw['data'] ?? $raw);
+    }
+
+    /**
+     * A refused capture carries `data.code` beside its message; anything without
+     * one (an older API, an idempotency refusal) stays the exception it was.
+     */
+    private static function captureException(ApiException $e): ?CaptureException
+    {
+        $data = $e->getResponseBody()['data'] ?? null;
+
+        if ($e->getStatusCode() !== 400 || ! is_array($data) || ! isset($data['code']) || ! is_string($data['code'])) {
+            return null;
+        }
+
+        return new CaptureException(
+            message: $e->getMessage(),
+            errorCode: $data['code'],
+            reason: isset($data['reason']) && is_string($data['reason']) ? $data['reason'] : null,
+            statusCode: $e->getStatusCode(),
+            responseBody: $e->getResponseBody(),
+            previous: $e,
+        );
     }
 
     /**

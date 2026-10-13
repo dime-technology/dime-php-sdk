@@ -9,8 +9,11 @@ use DimePayments\Sdk\Support\Arr;
 /**
  * The simple `{ "message": "..." }` acknowledgement returned by mutating
  * endpoints such as refund, void, and the various delete operations.
+ *
+ * Not final: {@see CaptureResult} extends it, so code written against the
+ * plain message result keeps working on a capture.
  */
-final class MessageResult
+class MessageResult
 {
     public function __construct(public readonly ?string $message) {}
 
