@@ -16,6 +16,31 @@ abstract class AbstractResource
     public function __construct(protected readonly Transport $transport) {}
 
     /**
+     * The `Idempotency-Key` header for a request that moves money: the caller's
+     * key, or a new random one. Either way it is fixed for the call, so the
+     * transport's automatic retries after a timeout or a 5xx send the same key
+     * and the API answers them from the first attempt instead of charging again.
+     *
+     * @return array<string, string>
+     */
+    protected static function idempotencyHeaders(?string $idempotencyKey): array
+    {
+        return ['Idempotency-Key' => $idempotencyKey ?? self::newIdempotencyKey()];
+    }
+
+    /**
+     * A random (version 4) UUID.
+     */
+    private static function newIdempotencyKey(): string
+    {
+        $bytes = random_bytes(16);
+        $bytes[6] = chr((ord($bytes[6]) & 0x0F) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3F) | 0x80);
+
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4));
+    }
+
+    /**
      * Build the standard request envelope, dropping empty `data`/`filters` groups.
      *
      * @param  array<string, mixed>  $data
