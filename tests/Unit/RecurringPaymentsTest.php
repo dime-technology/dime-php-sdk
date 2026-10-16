@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use DimePayments\Sdk\DataObjects\MessageResult;
 use DimePayments\Sdk\DataObjects\RecurringPayment;
+use DimePayments\Sdk\DataObjects\RecurringPaymentItem;
 use Psr\Http\Message\RequestInterface;
 
 it('creates a recurring payment and returns a typed object', function () {
@@ -124,5 +125,91 @@ it('deletes and returns a message result', function () {
     expect($request->getMethod())->toBe('POST');
     expect(sentJson($history))->toBe([
         'data' => ['sid' => '000010', 'recurring_payment_id' => 99],
+    ]);
+});
+
+it('reads the pinned item and the covered fee', function () {
+    [$client] = fakeClient([
+        jsonResponse(['data' => [
+            'id' => 99,
+            'amount' => '25.75',
+            'cover_processing_amount' => '0.75',
+            'item' => ['id' => 42, 'name' => 'Building Fund'],
+            'payment_method' => ['id' => 7, 'type' => 'cc'],
+            'shipping_address' => [],
+        ]]),
+    ]);
+
+    $payment = $client->recurringPayments->show('000010', 99);
+
+    expect($payment->coverProcessingAmount)->toBe('0.75')
+        ->and($payment->item)->toBeInstanceOf(RecurringPaymentItem::class)
+        ->and($payment->item?->id)->toBe(42)
+        ->and($payment->item?->name)->toBe('Building Fund');
+});
+
+it('reads an unpinned payment as a null item', function () {
+    [$client] = fakeClient([
+        jsonResponse(['data' => ['id' => 99, 'cover_processing_amount' => null, 'item' => null]]),
+    ]);
+
+    $payment = $client->recurringPayments->show('000010', 99);
+
+    expect($payment->item)->toBeNull()
+        ->and($payment->coverProcessingAmount)->toBeNull();
+});
+
+it('keeps an item id whose name is not disclosed', function () {
+    [$client] = fakeClient([
+        jsonResponse(['data' => ['id' => 99, 'item' => ['id' => 42, 'name' => null]]]),
+    ]);
+
+    $payment = $client->recurringPayments->show('000010', 99);
+
+    expect($payment->item?->id)->toBe(42)
+        ->and($payment->item?->name)->toBeNull();
+});
+
+it('sends item_id and customer_covers_fee on create', function () {
+    [$client, $history] = fakeClient([
+        jsonResponse(['data' => ['id' => 99, 'item' => ['id' => 42, 'name' => 'Building Fund']]]),
+    ]);
+
+    $client->recurringPayments->create('000010', [
+        'name' => 'Monthly gift',
+        'amount' => '25.00',
+        'start_date' => '2026-01-01',
+        'recurrence_schedule' => 'Monthly',
+        'payment_method' => 7,
+        'customer_uuid' => 'abc-123',
+        'customer_covers_fee' => true,
+        'item_id' => 42,
+    ]);
+
+    expect(sentJson($history)['data'])->toMatchArray(['customer_covers_fee' => true, 'item_id' => 42]);
+});
+
+it('sends a null item_id on edit to unpin, and still drops other nulls', function () {
+    [$client, $history] = fakeClient([
+        jsonResponse(['data' => ['id' => 99, 'item' => null]]),
+    ]);
+
+    $payment = $client->recurringPayments->edit('000010', 99, ['item_id' => null, 'name' => null]);
+
+    expect($payment->item)->toBeNull();
+    expect(sentJson($history))->toBe([
+        'data' => ['sid' => '000010', 'recurring_payment_id' => 99, 'item_id' => null],
+    ]);
+});
+
+it('leaves item_id out of an edit that does not mention it', function () {
+    [$client, $history] = fakeClient([
+        jsonResponse(['data' => ['id' => 99, 'amount' => '30.00']]),
+    ]);
+
+    $client->recurringPayments->edit('000010', 99, ['amount' => '30.00']);
+
+    expect(sentJson($history))->toBe([
+        'data' => ['sid' => '000010', 'recurring_payment_id' => 99, 'amount' => '30.00'],
     ]);
 });

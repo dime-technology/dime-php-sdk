@@ -14,7 +14,7 @@ final class Config
 {
     public const DEFAULT_BASE_URL = 'https://app.dimepayments.com';
 
-    public const VERSION = '1.5.0';
+    public const VERSION = '1.6.0';
 
     /**
      * @param  string  $token  Sanctum personal access token (sent as a Bearer token).
