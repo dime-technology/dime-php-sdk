@@ -264,7 +264,15 @@ $rp = $dime->recurringPayments->create('000010', [
     'recurrence_schedule' => 'Monthly',
     'payment_method'      => $pm->id,
     'customer_uuid'       => $customer->uuid,
+    'customer_covers_fee' => true,      // optional: amount is what you net, the fee is added on top
+    'item_id'             => $item->id, // optional: the designation; omit for the default item
 ]);
+
+$rp->item?->name;              // null when the payment is unpinned
+$rp->coverProcessingAmount;    // the fee portion of amount, or null
+
+// Unpin: each run is then credited to the merchant's default item at the time.
+$dime->recurringPayments->edit('000010', $rp->id, ['item_id' => null]);
 
 $dime->recurringPayments->pause('000010', $rp->id, '2026-09-01 00:00:00');
 $dime->recurringPayments->activate('000010', $rp->id);

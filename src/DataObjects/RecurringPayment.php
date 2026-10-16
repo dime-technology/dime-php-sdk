@@ -11,6 +11,9 @@ use DimePayments\Sdk\Support\Arr;
  *
  * Amounts are returned by the API as decimal strings and are preserved as
  * strings here to avoid float rounding.
+ *
+ * `item` is null when the payment is unpinned: each run is then credited to
+ * whatever the merchant's default item is at the time.
  */
 final class RecurringPayment
 {
@@ -32,6 +35,8 @@ final class RecurringPayment
         public readonly ?string $error,
         public readonly RecurringPaymentMethod $paymentMethod,
         public readonly TransactionAddress $shippingAddress,
+        public readonly ?string $coverProcessingAmount = null,
+        public readonly ?RecurringPaymentItem $item = null,
     ) {}
 
     /**
@@ -57,6 +62,8 @@ final class RecurringPayment
             error: Arr::string($data, 'error'),
             paymentMethod: RecurringPaymentMethod::fromArray(Arr::arrayFrom($data, ['payment_method'])),
             shippingAddress: TransactionAddress::fromArray(Arr::arrayFrom($data, ['shipping_address'])),
+            coverProcessingAmount: Arr::string($data, 'cover_processing_amount'),
+            item: is_array($data['item'] ?? null) ? RecurringPaymentItem::fromArray($data['item']) : null,
         );
     }
 }

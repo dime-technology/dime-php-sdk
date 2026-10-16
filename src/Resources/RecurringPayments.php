@@ -50,6 +50,11 @@ final class RecurringPayments extends AbstractResource
     /**
      * Create a recurring payment schedule.
      *
+     * `customer_covers_fee` true treats `amount` as what the merchant nets and
+     * adds the processing fee on top of each charge. `item_id` pins the item
+     * (designation) each run is credited to; omit it, or pass null, for the
+     * merchant's default item.
+     *
      * @param  array{
      *     name: string,
      *     amount: int|float|string,
@@ -58,6 +63,8 @@ final class RecurringPayments extends AbstractResource
      *     recurrence_schedule: string,
      *     payment_method: int,
      *     customer_uuid: string,
+     *     customer_covers_fee?: bool,
+     *     item_id?: int|null,
      *     shipping_address?: array<string, mixed>
      * }  $attributes
      */
@@ -71,6 +78,13 @@ final class RecurringPayments extends AbstractResource
     /**
      * Edit an existing recurring payment schedule.
      *
+     * Omitted keys are left unchanged. `customer_covers_fee` true turns fee
+     * coverage on (grossing up `amount`, or the current amount) and false
+     * turns it off. `item_id` re-pins the item (designation) each run is
+     * credited to; pass null to unpin it, so each run is credited to whatever
+     * the merchant's default item is at the time. Unlike every other key, an
+     * explicit null `item_id` is sent rather than dropped.
+     *
      * @param  array{
      *     name?: string,
      *     amount?: int|float|string,
@@ -79,15 +93,23 @@ final class RecurringPayments extends AbstractResource
      *     recurrence_schedule?: string,
      *     payment_method?: int,
      *     customer_uuid?: string,
+     *     customer_covers_fee?: bool,
+     *     item_id?: int|null,
      *     shipping_address?: array<string, mixed>
      * }  $attributes
      */
     public function edit(string $sid, int|string $recurringPaymentId, array $attributes): RecurringPayment
     {
-        $raw = $this->transport->request('PATCH', 'recurring-payment/edit', $this->envelope([
+        $body = $this->envelope([
             'sid' => $sid,
             'recurring_payment_id' => $recurringPaymentId,
-        ] + $attributes));
+        ] + $attributes);
+
+        if (array_key_exists('item_id', $attributes) && $attributes['item_id'] === null) {
+            $body['data']['item_id'] = null;
+        }
+
+        $raw = $this->transport->request('PATCH', 'recurring-payment/edit', $body);
 
         return RecurringPayment::fromArray($raw['data'] ?? []);
     }
