@@ -521,7 +521,7 @@ $result = $dime->funds->release('000010', [
     'idempotency_key' => 'payout-2026-09-25-0001', // fresh per release; reuse it on retry
 ]);
 
-$result->release->status;        // "released" (sent), "failed" (declined, nothing moved) or "unknown"
+$result->release->status;        // "released" (sent), "failed" (declined, nothing moved), "unknown" or later "returned"
 $result->release->failureReason; // why, when it failed
 ```
 
@@ -533,6 +533,13 @@ reconciled.
 A `failed` release is returned rather than thrown, because it was recorded. A release refused outright
 (over `releasable`, ineligible payments, a reused key, or another release already in flight) throws an
 `ApiException`, with any ineligible payments in `$e->getResponseBody()['data']['ineligible']`.
+
+A release can also become `returned`, days after it was `released`, when the merchant's own bank
+rejects the transfer and the money comes back. The API reports it on the `funds_release_failed`
+webhook and when you retry with that release's key. `returnedAt` says when, `returnCode` gives the bank's reason
+(`R02` account closed, `R03` no account, `R04` invalid account number), and `returnFee` what the return
+cost. `fee` stays what the transfer was quoted at. `returnFee` can be empty until the return fee
+has been reported.
 
 ## Pagination
 
