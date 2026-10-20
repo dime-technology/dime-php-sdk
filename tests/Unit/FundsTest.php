@@ -28,6 +28,9 @@ function fundRelease(array $overrides = []): array
         'failure_reason' => null,
         'requested_at' => '2026-09-25T14:02:11+00:00',
         'completed_at' => '2026-09-25T14:02:12+00:00',
+        'returned_at' => null,
+        'return_code' => null,
+        'return_fee' => null,
     ];
 }
 
@@ -133,7 +136,10 @@ it('releases funds by amount', function () {
         ->and($result->release->fee)->toBe('30')
         ->and($result->release->status)->toBe('released')
         ->and($result->release->idempotencyKey)->toBe('payout-2026-09-25-0001')
-        ->and($result->release->transactionInfoIds)->toBe([]);
+        ->and($result->release->transactionInfoIds)->toBe([])
+        ->and($result->release->returnedAt)->toBeNull()
+        ->and($result->release->returnCode)->toBeNull()
+        ->and($result->release->returnFee)->toBeNull();
 
     expect($history[0]['request']->getMethod())->toBe('POST')
         ->and($history[0]['request']->getUri()->getPath())->toBe('/api/funds/release');
@@ -227,3 +233,40 @@ it('throws on an idempotency key conflict', function () {
 
     $client->funds->release('91828382', ['amount' => 10, 'idempotency_key' => 'reused']);
 })->throws(ApiException::class, 'That idempotency key was used for a different release.');
+
+it('reads a release the bank returned, with what the return cost', function () {
+    [$client] = fakeClient([
+        jsonResponse(['data' => [
+            'sid' => '91828382',
+            'replayed' => true,
+            'release' => fundRelease([
+                'status' => 'returned',
+                'status_label' => 'Returned',
+                'failure_reason' => 'The receiving bank rejected the transfer: Account Closed.',
+                'returned_at' => '2026-09-29T15:37:13+00:00',
+                'return_code' => 'R02',
+                'return_fee' => 25,
+            ]),
+        ]]),
+    ]);
+
+    $release = $client->funds->release('91828382', [
+        'amount' => 1500,
+        'idempotency_key' => 'payout-2026-09-25-0001',
+    ])->release;
+
+    expect($release->status)->toBe('returned')
+        ->and($release->completedAt)->toBe('2026-09-25T14:02:12+00:00')
+        ->and($release->returnedAt)->toBe('2026-09-29T15:37:13+00:00')
+        ->and($release->returnCode)->toBe('R02')
+        ->and($release->returnFee)->toBe('25')
+        ->and($release->fee)->toBe('30');
+});
+
+it('still builds a release positionally without the return fields', function () {
+    $release = new FundRelease(1, '10', '30', 'released', 'Released', 'k', [], null, null, null);
+
+    expect($release->returnedAt)->toBeNull()
+        ->and($release->returnCode)->toBeNull()
+        ->and($release->returnFee)->toBeNull();
+});

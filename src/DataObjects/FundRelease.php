@@ -15,6 +15,14 @@ use DimePayments\Sdk\Support\Arr;
  * `releasable` until reconciled). `transactionInfoIds` lists the payments
  * released when the release named them, and is empty for a release by amount.
  *
+ * "returned" is what a "released" release becomes days later when the
+ * merchant's own bank rejects the transfer and the money comes back.
+ * `completedAt` still says when it was sent; `returnedAt` says when the bank
+ * rejected it, `returnCode` gives the bank's reason (R02 account closed, R03 no
+ * account, R04 invalid account number), and `returnFee` what the return cost.
+ * `fee` keeps what the transfer was quoted at. `returnFee` can be null on a
+ * returned release until the return fee has been reported.
+ *
  * Amounts are preserved as strings to avoid float rounding.
  */
 final class FundRelease
@@ -33,6 +41,9 @@ final class FundRelease
         public readonly ?string $failureReason,
         public readonly ?string $requestedAt,
         public readonly ?string $completedAt,
+        public readonly ?string $returnedAt = null,
+        public readonly ?string $returnCode = null,
+        public readonly ?string $returnFee = null,
     ) {}
 
     /**
@@ -57,6 +68,9 @@ final class FundRelease
             failureReason: Arr::string($data, 'failure_reason'),
             requestedAt: Arr::string($data, 'requested_at'),
             completedAt: Arr::string($data, 'completed_at'),
+            returnedAt: Arr::string($data, 'returned_at'),
+            returnCode: Arr::string($data, 'return_code'),
+            returnFee: Arr::string($data, 'return_fee'),
         );
     }
 }
